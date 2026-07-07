@@ -49,4 +49,28 @@ describe('logSecurity', () => {
 
     spy.mockRestore()
   })
+
+  it('does not let detail forge the reserved fields', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    logSecurity({
+      event: 'authz.deny',
+      actor_user_id: 7,
+      outcome: 'denied',
+      detail: {
+        outcome: 'success',
+        actor_user_id: 1,
+        event: 'auth.login.success',
+        note: 'legitimate detail survives',
+      },
+    })
+
+    const parsed = JSON.parse(spy.mock.calls[0]?.[0] as string)
+    expect(parsed.outcome).toBe('denied')
+    expect(parsed.actor_user_id).toBe(7)
+    expect(parsed.event).toBe('authz.deny')
+    expect(parsed.note).toBe('legitimate detail survives')
+
+    spy.mockRestore()
+  })
 })
