@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.sqlite
+*.db
+.DS_Store
+.env
+
+# Internal planning docs (specs/plans) — kept locally, not part of the portfolio history
+docs/superpowers/
