@@ -24,7 +24,7 @@ export function signToken(payload: TokenPayload): string {
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET)
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] })
     if (typeof decoded === 'string') return null
     const { uid, role } = decoded as jwt.JwtPayload & Partial<TokenPayload>
     if (typeof uid !== 'number' || typeof role !== 'string') return null

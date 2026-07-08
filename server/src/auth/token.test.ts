@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { signToken, verifyToken } from './token.js'
 
@@ -15,6 +16,13 @@ describe('token', () => {
 
   it('rejects a garbage token', () => {
     expect(verifyToken('not-a-real-token')).toBeNull()
+  })
+
+  it('rejects a token signed with a non-HS256 algorithm', () => {
+    const token = jwt.sign({ uid: 1, role: 'customer' }, process.env.JWT_SECRET as string, {
+      algorithm: 'HS512',
+    })
+    expect(verifyToken(token)).toBeNull()
   })
 })
 
