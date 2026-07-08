@@ -2,6 +2,7 @@ import cookieParser from 'cookie-parser'
 import express from 'express'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestId } from './middleware/requestId.js'
+import { accountsRouter } from './routes/accounts.js'
 import { authRouter } from './routes/auth.js'
 
 // Factory only -- no listen() here, so this stays supertest-safe. Boot wiring
@@ -13,6 +14,7 @@ export function createApp() {
   app.use(requestId)
 
   app.use('/api/auth', authRouter)
+  app.use('/api/accounts', accountsRouter)
 
   app.use(errorHandler)
 
