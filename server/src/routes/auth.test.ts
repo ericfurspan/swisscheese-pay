@@ -1,5 +1,6 @@
 process.env.DB_PATH = ':memory:'
 
+import bcrypt from 'bcryptjs'
 import request from 'supertest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../app.js'
@@ -65,6 +66,19 @@ describe('auth routes', () => {
     const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
     expect(line).toMatchObject({ event: 'auth.login.failure', outcome: 'failure' })
     logSpy.mockRestore()
+  })
+
+  it('runs a password comparison even for an unknown email (no timing oracle)', async () => {
+    const app = createApp()
+    const compareSpy = vi.spyOn(bcrypt, 'compareSync')
+
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'nobody-registered@scpay.test', password: 'whatever' })
+
+    expect(res.status).toBe(401)
+    expect(compareSpy).toHaveBeenCalledTimes(1)
+    compareSpy.mockRestore()
   })
 
   it('logs out and clears the session cookie', async () => {

@@ -20,6 +20,11 @@ function fabricatedSsn(): string {
   return `${part(3)}-${part(2)}-${part(4)}`
 }
 
+// Compared against when no user is found, so login always pays the cost of one
+// bcrypt compare -- otherwise a nonexistent email short-circuits before hashing
+// and response latency alone discloses which emails are registered.
+const DUMMY_PASSWORD_HASH = hashPassword('sc-pay-timing-guard-dummy-password')
+
 const SESSION_COOKIE_OPTIONS = {
   httpOnly: true,
   sameSite: 'lax' as const,
@@ -67,9 +72,12 @@ authRouter.post('/login', (req, res) => {
           UserRow | undefined)
       : undefined
 
-  const valid = user && typeof password === 'string' && verifyPassword(password, user.password_hash)
+  const passwordMatches = verifyPassword(
+    typeof password === 'string' ? password : '',
+    user?.password_hash ?? DUMMY_PASSWORD_HASH,
+  )
 
-  if (!user || !valid) {
+  if (!user || !passwordMatches) {
     logSecurity({
       event: 'auth.login.failure',
       actor_user_id: null,
