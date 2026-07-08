@@ -60,6 +60,13 @@ authRouter.post('/register', (req, res) => {
   const uid = Number(lastInsertRowid)
   const token = signToken({ uid, role: 'customer' })
   res.cookie(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS)
+  logSecurity({
+    event: 'auth.register',
+    actor_user_id: uid,
+    outcome: 'success',
+    request_id: req.id,
+    ip: req.ip,
+  })
   res.status(201).json({ id: uid, email, full_name: fullName })
 })
 

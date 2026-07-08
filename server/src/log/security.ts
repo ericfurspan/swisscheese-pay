@@ -1,4 +1,5 @@
 export type SecurityEvent =
+  | 'auth.register'
   | 'auth.login.success'
   | 'auth.login.failure'
   | 'auth.logout'
