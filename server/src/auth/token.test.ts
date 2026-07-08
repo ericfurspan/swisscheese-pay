@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { signToken, verifyToken } from './token.js'
 
 describe('token', () => {
@@ -15,5 +15,20 @@ describe('token', () => {
 
   it('rejects a garbage token', () => {
     expect(verifyToken('not-a-real-token')).toBeNull()
+  })
+})
+
+describe('token secret guard', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('refuses to load without JWT_SECRET when NODE_ENV=production', async () => {
+    vi.resetModules()
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('JWT_SECRET', undefined)
+
+    await expect(import('./token.js')).rejects.toThrow(/JWT_SECRET/)
   })
 })
