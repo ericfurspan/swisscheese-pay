@@ -1,15 +1,17 @@
 import jwt from 'jsonwebtoken'
 
-// Dev-only default so the app boots without extra setup. This value is committed to
-// source, so it must never be reachable in production — a missing JWT_SECRET there
-// has to fail closed, not silently sign/verify tokens with a publicly known key.
-const DEV_DEFAULT_SECRET = 'dev-only-insecure-secret'
-
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('JWT_SECRET must be set when NODE_ENV=production')
+// No fallback: a committed default secret is forgeable by anyone with repo access,
+// and env-based gating (e.g. only requiring it when NODE_ENV=production) drifts out
+// of sync with however the app actually gets deployed. JWT_SECRET is always required;
+// local dev/test convenience is provided by tooling (see server/package.json "dev"
+// script, and vitest.config.ts for tests), never by a literal in this file.
+function requireSecret(): string {
+  const secret = process.env.JWT_SECRET
+  if (!secret) throw new Error('JWT_SECRET must be set')
+  return secret
 }
 
-const JWT_SECRET = process.env.JWT_SECRET ?? DEV_DEFAULT_SECRET
+const JWT_SECRET = requireSecret()
 
 export interface TokenPayload {
   uid: number

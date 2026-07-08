@@ -24,9 +24,8 @@ describe('token secret guard', () => {
     vi.resetModules()
   })
 
-  it('refuses to load without JWT_SECRET when NODE_ENV=production', async () => {
+  it('refuses to load without JWT_SECRET', async () => {
     vi.resetModules()
-    vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('JWT_SECRET', undefined)
 
     await expect(import('./token.js')).rejects.toThrow(/JWT_SECRET/)
