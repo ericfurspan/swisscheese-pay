@@ -36,10 +36,17 @@ const SESSION_COOKIE_OPTIONS = {
 
 export const authRouter = Router()
 
+const MIN_PASSWORD_LENGTH = 8
+
 authRouter.post('/register', (req, res) => {
   const { email, password, full_name: fullName } = req.body ?? {}
   if (typeof email !== 'string' || typeof password !== 'string' || typeof fullName !== 'string') {
     res.status(400).json({ error: 'email, password, and full_name are required' })
+    return
+  }
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    res.status(400).json({ error: `password must be at least ${MIN_PASSWORD_LENGTH} characters` })
     return
   }
 
@@ -119,6 +126,7 @@ authRouter.post('/logout', (req, res) => {
     actor_user_id: payload?.uid ?? null,
     outcome: 'success',
     request_id: req.id,
+    ip: req.ip,
   })
   res.status(204).end()
 })

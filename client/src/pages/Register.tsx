@@ -50,6 +50,7 @@ export function RegisterPage() {
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         required
+        minLength={8}
       />
       {error && <p role="alert">{error}</p>}
       <button type="submit" disabled={submitting}>

@@ -54,6 +54,16 @@ describe('auth routes', () => {
     logSpy.mockRestore()
   })
 
+  it('rejects registration with a too-short password', async () => {
+    const app = createApp()
+
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'short@scpay.test', password: 'short1', full_name: 'Short Pw' })
+
+    expect(res.status).toBe(400)
+  })
+
   it('rejects registration with a duplicate email', async () => {
     const app = createApp()
     const payload = { email: 'dupe@scpay.test', password: 'Sup3rSecret!', full_name: 'Dupe User' }
@@ -107,5 +117,21 @@ describe('auth routes', () => {
 
     const protectedRes = await agent.get('/api/_protected-test-only')
     expect(protectedRes.status).toBe(401)
+  })
+
+  it('logs auth.logout with the same field set as other security events', async () => {
+    const app = buildAppWithProtectedTestRoute()
+    const agent = request.agent(app)
+    await agent
+      .post('/api/auth/register')
+      .send({ email: 'logoutfields@scpay.test', password: 'Sup3rSecret!', full_name: 'Logout Fields' })
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await agent.post('/api/auth/logout')
+
+    const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
+    expect(line).toMatchObject({ event: 'auth.logout', outcome: 'success' })
+    expect(line.ip).toBeDefined()
+    logSpy.mockRestore()
   })
 })
