@@ -2,10 +2,12 @@ process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { signToken } from '../auth/token.js'
 import { createApp } from '../app.js'
 import { getDb } from '../db/connection.js'
 import { resetSchema } from '../db/schema.js'
 import { seed } from '../db/seed.js'
+import { SESSION_COOKIE } from '../middleware/requireAuth.js'
 
 beforeEach(() => {
   const db = getDb()
@@ -63,5 +65,29 @@ describe('profile routes', () => {
       full_name: string
     }
     expect(bob.full_name).toBe('Bob Brown')
+  })
+
+  it('treats a validly-signed token for a since-deleted user as unauthenticated', async () => {
+    // Simulates a session that outlives its user row -- e.g. the DB reseeds
+    // (as it does on every container boot) while a still-unexpired cookie
+    // from a prior boot is presented.
+    const staleToken = signToken({ uid: 999_999, role: 'customer' })
+
+    const res = await request(createApp())
+      .get('/api/profile')
+      .set('Cookie', [`${SESSION_COOKIE}=${staleToken}`])
+
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects a profile update for a since-deleted user rather than reporting false success', async () => {
+    const staleToken = signToken({ uid: 999_999, role: 'customer' })
+
+    const res = await request(createApp())
+      .patch('/api/profile')
+      .set('Cookie', [`${SESSION_COOKIE}=${staleToken}`])
+      .send({ full_name: 'Nobody' })
+
+    expect(res.status).toBe(401)
   })
 })

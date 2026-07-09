@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { getDb } from '../db/connection.js'
-import { requireAuth } from '../middleware/requireAuth.js'
+import { requireAuth, SESSION_COOKIE } from '../middleware/requireAuth.js'
 
 export const profileRouter = Router()
 
@@ -21,7 +21,16 @@ profileRouter.get('/', (req, res) => {
   const db = getDb()
   const row = db
     .prepare('SELECT id, email, full_name, ssn FROM users WHERE id = ?')
-    .get(req.user!.uid) as ProfileRow
+    .get(req.user!.uid) as ProfileRow | undefined
+
+  // A validly-signed token can outlive its user row (e.g. the DB reseeds on
+  // every container boot while a still-unexpired cookie from a prior boot is
+  // presented) -- treat that the same as no session at all.
+  if (!row) {
+    res.clearCookie(SESSION_COOKIE)
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
 
   res.status(200).json({ id: row.id, email: row.email, full_name: row.full_name, ssn: maskSsn(row.ssn) })
 })
@@ -37,6 +46,18 @@ profileRouter.patch('/', (req, res) => {
   }
 
   const db = getDb()
-  db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(fullName, req.user!.uid)
+  const { changes } = db
+    .prepare('UPDATE users SET full_name = ? WHERE id = ?')
+    .run(fullName, req.user!.uid)
+
+  // See the GET handler above: a validly-signed token can outlive its user
+  // row. Without this check a stale session would get a 200 claiming the
+  // update succeeded when no row was actually touched.
+  if (changes === 0) {
+    res.clearCookie(SESSION_COOKIE)
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
   res.status(200).json({ id: req.user!.uid, full_name: fullName })
 })
