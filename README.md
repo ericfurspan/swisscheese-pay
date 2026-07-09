@@ -1,0 +1,95 @@
+# SwissCheese Pay
+
+An intentionally vulnerable personal banking / payments dashboard, built as a target for
+hands-on application security practice with OWASP ZAP and Burp Suite.
+
+## What this is
+
+SwissCheese Pay is a minimal neobank-style account portal: register, log in, view
+account balances and transaction history, transfer money between your own accounts,
+generate payment request links, and edit your profile. The domain — accounts, balances,
+money movement, PII — is chosen deliberately. It's the sharpest vehicle for demonstrating
+real-world impact: business-logic flaws around money movement, and access-control bugs
+that leak another user's balance, transaction history, or SSN, carry stakes that a
+task-board or CRM clone can't.
+
+This repo is a portfolio piece supporting a pivot from full-stack engineering into
+application security. **The code currently in `main` is Phase 0 — a working, secure
+baseline with no deliberate vulnerabilities.** Later phases introduce a focused set of
+vulnerabilities behind toggles, each taken through the loop described below.
+
+## The four-part loop
+
+Every headline vulnerability this project ships is taken through four stages,
+documented per-vuln in [`VULNS.md`](./VULNS.md):
+
+1. **Exploit** — reproduce the attack, attacker's-eye view.
+2. **Root cause** — the specific code and design decision that allows it.
+3. **Fix** — the secure implementation, toggleable side by side with the vulnerable one.
+4. **Detection** — a detection rule written against structured security logs, validated
+   as an artifact.
+
+This ties offense, secure coding, and detection engineering into one narrative instead
+of three disconnected exercises. Depth over breadth: a small number of vulnerabilities
+documented all the way through beats a broad, shallow checklist that falls apart the
+moment someone probes past the happy path.
+
+## Differentiators
+
+Headlined first because they're what prove hands-on offensive/exploit-side skill —
+generic OWASP-Top-10 web vulns are kept for breadth but aren't the point:
+
+- **Broken access control (BOLA / IDOR + function-level authz).** Reading another
+  user's account, transactions, or SSN; a customer invoking admin-only actions.
+- **Money-movement business logic.** Race conditions on concurrent transfers, replay of
+  a transfer request, negative-amount and tampered-recipient transfers — the class of
+  bug most absent from generic vuln-bank clones.
+- **JWT attacks from the attacker's side.** `alg:none`, weak signing secrets, forging a
+  token to impersonate another user or escalate to admin.
+- **Excessive data exposure / mass assignment.** Over-returned sensitive fields;
+  `role`/`balance` writable via unexpected request fields.
+
+Standard web-vuln coverage (stored XSS, CSRF, open redirect, clickjacking, CORS
+misconfiguration, client-side-only authz) is retained underneath for OWASP breadth, but
+built as a thinner pass.
+
+## Architecture
+
+Single container, single origin: Express serves both the built React SPA and the
+`/api` routes from one host/port, bound to `127.0.0.1` only — this app must never be
+reachable beyond localhost. SQLite (`better-sqlite3`) is reseeded on every boot, so
+every scan starts from the same known state.
+
+```
+Browser ──HTTP──> 127.0.0.1:8082 ──> Express
+                                        ├── serves built React SPA (static)
+                                        ├── /api/*  (JSON API)
+                                        └── SQLite (reseeded on boot)
+```
+
+**Stack:** React + Vite + TypeScript (client), Express + TypeScript (server),
+`better-sqlite3`, JWT auth in an httpOnly cookie.
+
+## Running it
+
+```
+make up      # docker compose up --build -d
+make logs
+make down
+```
+
+Then visit `http://127.0.0.1:8082`. Seeded logins (all password `Password123!`):
+
+- `alice@scpay.test`
+- `bob@scpay.test`
+- `admin@scpay.test`
+
+Without Docker: `npm install && npm run build && npm run dev` (server serves the built
+client at the same URL above).
+
+## Safety
+
+- Loopback-only binding, enforced both by the app and by the container's port
+  publishing — never expose this beyond localhost.
+- No real credentials, money, or PII. All seed data is fabricated.
+- Private repo until deliberately made otherwise.
