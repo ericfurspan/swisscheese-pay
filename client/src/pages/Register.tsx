@@ -2,9 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth.js'
 
-export function LoginPage() {
-  const { login } = useAuth()
+export function RegisterPage() {
+  const { register } = useAuth()
   const navigate = useNavigate()
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -15,10 +16,10 @@ export function LoginPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await login(email, password)
+      await register(email, password, fullName)
       navigate('/dashboard')
     } catch {
-      setError('Invalid email or password')
+      setError('Could not register with those details')
     } finally {
       setSubmitting(false)
     }
@@ -26,7 +27,14 @@ export function LoginPage() {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h1>Log in</h1>
+      <h1>Register</h1>
+      <label htmlFor="full_name">Full name</label>
+      <input
+        id="full_name"
+        value={fullName}
+        onChange={(event) => setFullName(event.target.value)}
+        required
+      />
       <label htmlFor="email">Email</label>
       <input
         id="email"
@@ -45,10 +53,10 @@ export function LoginPage() {
       />
       {error && <p role="alert">{error}</p>}
       <button type="submit" disabled={submitting}>
-        Log in
+        Register
       </button>
       <p>
-        Need an account? <Link to="/register">Register</Link>
+        Already have an account? <Link to="/login">Log in</Link>
       </p>
     </form>
   )

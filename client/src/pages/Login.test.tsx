@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../auth/AuthContext.js'
 import { LoginPage } from './Login.js'
@@ -21,7 +22,7 @@ function stubFetch(loggedInRef: { current: boolean }) {
     }
     if (url === '/api/auth/login') {
       loggedInRef.current = true
-      return new Response(null, { status: 200 })
+      return new Response(JSON.stringify({ id: 1, email: 'alice@scpay.test' }), { status: 200 })
     }
     return new Response(null, { status: 404 })
   })
@@ -34,9 +35,11 @@ describe('LoginPage', () => {
     const fetchMock = stubFetch({ current: false })
 
     render(
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>,
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
     )
 
     await userEvent.type(screen.getByLabelText(/email/i), 'alice@scpay.test')
@@ -50,6 +53,27 @@ describe('LoginPage', () => {
       email: 'alice@scpay.test',
       password: 'Password123!',
     })
+  })
+
+  it('redirects to the dashboard after a successful login', async () => {
+    stubFetch({ current: false })
+
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/dashboard" element={<p>Dashboard stub</p>} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+
+    await userEvent.type(screen.getByLabelText(/email/i), 'alice@scpay.test')
+    await userEvent.type(screen.getByLabelText(/password/i), 'Password123!')
+    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+
+    expect(await screen.findByText('Dashboard stub')).toBeInTheDocument()
   })
 
   it('shows an error message when login fails', async () => {
@@ -66,9 +90,11 @@ describe('LoginPage', () => {
     )
 
     render(
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>,
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
     )
 
     await userEvent.type(screen.getByLabelText(/email/i), 'alice@scpay.test')
