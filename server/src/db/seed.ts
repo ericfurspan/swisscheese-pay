@@ -1,7 +1,7 @@
-import bcrypt from 'bcryptjs'
 import type Database from 'better-sqlite3'
+import { hashPassword } from '../auth/password.js'
 
-const SEED_PASSWORD_HASH = bcrypt.hashSync('Password123!', 10)
+const SEED_PASSWORD_HASH = hashPassword('Password123!')
 
 interface SeedUser {
   email: string

@@ -1,4 +1,5 @@
 export type SecurityEvent =
+  | 'auth.register'
   | 'auth.login.success'
   | 'auth.login.failure'
   | 'auth.logout'
@@ -19,7 +20,10 @@ export interface SecurityLogEntry {
 }
 
 export function logSecurity(entry: SecurityLogEntry): void {
+  // detail is spread first so it can never override the reserved fields below —
+  // otherwise a colliding key (e.g. detail.outcome) could forge the log line.
   const line = {
+    ...entry.detail,
     ts: new Date().toISOString(),
     event: entry.event,
     actor_user_id: entry.actor_user_id,
@@ -27,7 +31,6 @@ export function logSecurity(entry: SecurityLogEntry): void {
     outcome: entry.outcome,
     ip: entry.ip,
     request_id: entry.request_id,
-    ...entry.detail,
   }
 
   console.log(JSON.stringify(line))

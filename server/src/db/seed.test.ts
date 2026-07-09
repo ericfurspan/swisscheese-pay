@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
+import { hashPassword } from '../auth/password.js'
 import { resetSchema } from './schema.js'
 import { seed } from './seed.js'
 
@@ -57,6 +58,16 @@ describe('seed', () => {
       .prepare("SELECT * FROM accounts WHERE user_id = ? AND type = 'checking'")
       .get(bob.id) as AccountRow
     expect(checking.balance_cents).toBe(25000)
+  })
+
+  it('hashes the seed password at the same cost as hashPassword', () => {
+    const db = setup()
+    const alice = db
+      .prepare('SELECT * FROM users WHERE email = ?')
+      .get('alice@scpay.test') as UserRow & { password_hash: string }
+    const referenceHash = hashPassword('reference')
+
+    expect(alice.password_hash.split('$')[2]).toBe(referenceHash.split('$')[2])
   })
 
   it('is idempotent after resetSchema (safe to reseed on boot)', () => {
