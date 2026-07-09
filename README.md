@@ -89,7 +89,11 @@ client at the same URL above).
 
 ## Safety
 
-- Loopback-only binding, enforced both by the app and by the container's port
-  publishing — never expose this beyond localhost.
+- Loopback-only reachability. Outside Docker the app itself binds `127.0.0.1`;
+  inside Docker it binds `0.0.0.0` in the container's own network namespace
+  (standard practice — otherwise the container would be unreachable through
+  Docker's port publishing at all) and the loopback-only guarantee instead
+  comes from docker-compose's `127.0.0.1:8082:8082` host-side bind. Either
+  way: never expose this beyond localhost.
 - No real credentials, money, or PII. All seed data is fabricated.
 - Private repo until deliberately made otherwise.

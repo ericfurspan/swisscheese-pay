@@ -16,6 +16,7 @@ COPY client/package.json client/package.json
 RUN npm install
 COPY . .
 RUN npm run build
+RUN npm prune --omit=dev
 
 # Runtime stage: only compiled output + prod-relevant node_modules.
 FROM node:20-slim
@@ -25,5 +26,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server/package.json ./server/package.json
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/client/dist ./client/dist
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 EXPOSE 8082
-CMD ["node", "server/dist/index.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
