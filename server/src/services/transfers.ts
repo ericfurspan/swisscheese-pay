@@ -30,6 +30,14 @@ export function transfer(db: Database.Database, input: TransferInput): TransferR
     return { ok: false, reason: 'invalid_amount' }
   }
 
+  // A self-transfer is a net-zero balance change that still writes a
+  // 'completed' transfer row plus two offsetting transaction rows -- pure
+  // ledger noise with no effect, so it's rejected the same as any other
+  // invalid destination.
+  if (fromId === toId) {
+    return { ok: false, reason: 'invalid_destination' }
+  }
+
   const debitStmt = db.prepare(
     'UPDATE accounts SET balance_cents = balance_cents - ? WHERE id = ? AND balance_cents >= ?',
   )

@@ -82,4 +82,12 @@ describe('transfer', () => {
     expect(result).toEqual({ ok: false, reason: 'invalid_destination' })
     expect(balanceOf(db, 1)).toBe(10_000)
   })
+
+  it('rejects a transfer to the same account', () => {
+    const db = setup()
+    const result = transfer(db, { fromId: 1, toId: 1, amountCents: 1_000, uid: 1 })
+
+    expect(result).toEqual({ ok: false, reason: 'invalid_destination' })
+    expect(balanceOf(db, 1)).toBe(10_000)
+  })
 })
