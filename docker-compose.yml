@@ -1,0 +1,14 @@
+services:
+  swisscheese-pay:
+    build: .
+    ports:
+      - '127.0.0.1:8082:8082'
+    environment:
+      # Bind inside the container's network namespace, not the host -- the
+      # loopback-only guarantee comes from the port spec above, not this.
+      - HOST=0.0.0.0
+      # Throwaway secret for a local training target, same convention as
+      # server/package.json's dev script. Not a real deployment; override
+      # with a real secret if this ever runs anywhere non-local.
+      - JWT_SECRET=dev-only-insecure-secret
+    restart: unless-stopped
