@@ -13,10 +13,9 @@ real-world impact: business-logic flaws around money movement, and access-contro
 that leak another user's balance, transaction history, or SSN, carry stakes that a
 task-board or CRM clone can't.
 
-This repo is a portfolio piece supporting a pivot from full-stack engineering into
-application security. **The code currently in `main` is Phase 0 — a working, secure
-baseline with no deliberate vulnerabilities.** Later phases introduce a focused set of
-vulnerabilities behind toggles, each taken through the loop described below.
+**The code currently in `main` is Phase 0 — a working, secure baseline with no
+deliberate vulnerabilities.** Later phases introduce a focused set of vulnerabilities
+behind toggles, each taken through the loop described below.
 
 ## The four-part loop
 

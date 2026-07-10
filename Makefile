@@ -2,6 +2,7 @@
 
 up:
 	docker compose up --build -d
+	@echo "SwissCheese Pay running at http://127.0.0.1:8082"
 
 down:
 	docker compose down
