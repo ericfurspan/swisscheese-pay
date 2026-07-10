@@ -64,6 +64,7 @@ export function TransferPage() {
         <input
           id="to_account"
           type="number"
+          min="1"
           value={toAccountId}
           onChange={(event) => setToAccountId(event.target.value)}
           required

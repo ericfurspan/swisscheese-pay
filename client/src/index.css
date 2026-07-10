@@ -107,3 +107,109 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+nav a {
+  color: var(--text-h);
+  text-decoration: none;
+}
+
+nav a:hover {
+  color: var(--accent);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
+label {
+  display: block;
+  align-self: flex-start;
+  font-size: 14px;
+  color: var(--text);
+}
+
+input + label,
+select + label {
+  margin-top: 16px;
+}
+
+form > button {
+  margin-top: 16px;
+}
+
+input,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+button {
+  font: inherit;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+[role='alert'] {
+  color: #dc2626;
+}
+
+[role='status'] {
+  color: #16a34a;
+}
+
+ul {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  text-align: left;
+  max-width: 500px;
+  margin-inline: auto;
+}
+
+li {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+li a {
+  color: var(--text-h);
+  text-decoration: none;
+}
+
+li a:hover {
+  color: var(--accent);
+}
