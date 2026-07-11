@@ -33,6 +33,21 @@ export function isAccountOwnedByUser(db: Database.Database, accountId: number, u
   return db.prepare('SELECT 1 FROM accounts WHERE id = ? AND user_id = ?').get(accountId, uid) !== undefined
 }
 
+interface OwnerRow {
+  user_id: number
+}
+
+// Looks up the true owner of an account independent of the (possibly
+// vulnerable) ownership predicate in getAccountForUser -- the access-log
+// event needs the real owner_user_id in both the vulnerable and fixed
+// states to compute actor_user_id != owner_user_id.
+export function getAccountOwnerId(db: Database.Database, accountId: number): number | undefined {
+  const row = db.prepare('SELECT user_id FROM accounts WHERE id = ?').get(accountId) as
+    | OwnerRow
+    | undefined
+  return row?.user_id
+}
+
 // BOLA (Phase 1): the ownership predicate is removed, so this fetches by id
 // alone regardless of uid. See vuln/phase-1-bola and fix/phase-1-bola.
 export function getAccountForUser(

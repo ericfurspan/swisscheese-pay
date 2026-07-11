@@ -1,7 +1,7 @@
 process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../app.js'
 import { getDb } from '../db/connection.js'
 import { resetSchema } from '../db/schema.js'
@@ -28,6 +28,10 @@ function accountId(accountNumber: string): number {
   return (
     getDb().prepare('SELECT id FROM accounts WHERE account_number = ?').get(accountNumber) as IdRow
   ).id
+}
+
+function userId(email: string): number {
+  return (getDb().prepare('SELECT id FROM users WHERE email = ?').get(email) as IdRow).id
 }
 
 describe('accounts routes', () => {
@@ -90,5 +94,79 @@ describe('accounts routes', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.length).toBeGreaterThan(0)
+  })
+
+  describe('authz.account_access logging', () => {
+    it('logs outcome=success with matching owner_user_id for a same-owner read', async () => {
+      const agent = await loginAsAlice()
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const id = accountId('CHK-1001')
+      const res = await agent.get(`/api/accounts/${id}`)
+
+      expect(res.status).toBe(200)
+      const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
+      expect(line).toMatchObject({
+        event: 'authz.account_access',
+        actor_user_id: userId('alice@scpay.test'),
+        target: `account:${id}`,
+        outcome: 'success',
+        owner_user_id: userId('alice@scpay.test'),
+        target_account_id: id,
+      })
+      logSpy.mockRestore()
+    })
+
+    // BOLA (vuln/phase-1-bola): cross-owner reads currently succeed, so this
+    // logs outcome=success with actor_user_id != owner_user_id -- exactly
+    // what the detections/ rule flags. fix/phase-1-bola flips this to
+    // outcome=denied for the same request.
+    it('logs outcome=success with a mismatched owner_user_id for a cross-owner read', async () => {
+      const agent = await loginAsAlice()
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const id = accountId('CHK-2001')
+      const res = await agent.get(`/api/accounts/${id}`)
+
+      expect(res.status).toBe(200)
+      const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
+      expect(line).toMatchObject({
+        event: 'authz.account_access',
+        actor_user_id: userId('alice@scpay.test'),
+        outcome: 'success',
+        owner_user_id: userId('bob@scpay.test'),
+      })
+      expect(line.actor_user_id).not.toBe(line.owner_user_id)
+      logSpy.mockRestore()
+    })
+
+    it('logs exactly once per transactions read, reusing the same event shape', async () => {
+      const agent = await loginAsAlice()
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const id = accountId('CHK-1001')
+      await agent.get(`/api/accounts/${id}/transactions`)
+
+      const accessLines = logSpy.mock.calls
+        .map((call) => JSON.parse(call[0] as string))
+        .filter((line) => line.event === 'authz.account_access')
+      expect(accessLines).toHaveLength(1)
+      expect(accessLines[0]).toMatchObject({ target: `account:${id}`, outcome: 'success' })
+      logSpy.mockRestore()
+    })
+
+    it('does not log for a nonexistent account id', async () => {
+      const agent = await loginAsAlice()
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const res = await agent.get('/api/accounts/999999')
+
+      expect(res.status).toBe(404)
+      const accessLines = logSpy.mock.calls
+        .map((call) => JSON.parse(call[0] as string))
+        .filter((line) => line.event === 'authz.account_access')
+      expect(accessLines).toHaveLength(0)
+      logSpy.mockRestore()
+    })
   })
 })
