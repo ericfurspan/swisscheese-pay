@@ -48,16 +48,17 @@ export function getAccountOwnerId(db: Database.Database, accountId: number): num
   return row?.user_id
 }
 
-// BOLA (Phase 1): the ownership predicate is removed, so this fetches by id
-// alone regardless of uid. See vuln/phase-1-bola and fix/phase-1-bola.
+// The ownership check that keeps this a "secure baseline" -- returning a row
+// only when it belongs to uid, rather than fetching by id alone, is what
+// vuln/phase-1-bola deliberately removed and fix/phase-1-bola restores.
 export function getAccountForUser(
   db: Database.Database,
   accountId: number,
-  uid: number, // eslint-disable-line @typescript-eslint/no-unused-vars
+  uid: number,
 ): AccountDTO | undefined {
-  return db.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ?`).get(accountId) as
-    | AccountDTO
-    | undefined
+  return db
+    .prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ? AND user_id = ?`)
+    .get(accountId, uid) as AccountDTO | undefined
 }
 
 export function listTransactionsForAccount(
