@@ -53,8 +53,8 @@ in app code. Within branch `phase-1-bola`, the vulnerability is introduced at ta
 and the branch are kept locally so either state stays `git checkout`-able.
 
 ### Exploit
-[`exploits/phase-1-bola.sh`](exploits/phase-1-bola.sh) logs in as a single seeded
-user (alice) and, using only her session cookie, enumerates a small range of
+[`security/exploits/phase-1-bola.sh`](security/exploits/phase-1-bola.sh) logs in as a
+single seeded user (alice) and, using only her session cookie, enumerates a small range of
 sequential account IDs against `GET /api/accounts/:id` and
 `/api/accounts/:id/transactions`. Against the vulnerable state it recovers another
 user's (bob's) account number, balance, and transaction history without ever
@@ -92,8 +92,8 @@ accounts they don't own, which is out of this phase's scope; money-movement bugs
 separate, later vuln phase.)
 
 ### Detection
-[`detections/authz-account-access.sh`](detections/authz-account-access.sh) flags any
-`authz.account_access` log line where `outcome == "success"` **and**
+[`security/detections/authz-account-access.sh`](security/detections/authz-account-access.sh)
+flags any `authz.account_access` log line where `outcome == "success"` **and**
 `actor_user_id != owner_user_id`. The `authz.account_access` event
 (`server/src/log/security.ts`, emitted from a shared `loadAccountForRead` helper in
 `server/src/routes/accountAccess.ts`) fires once per existing-account read in both the
@@ -105,8 +105,8 @@ same-owner read also logs `outcome == "success"`, and would false-positive on a 
 "event exists" rule.
 
 Validated against
-[`detections/sample-vulnerable.jsonl`](detections/sample-vulnerable.jsonl), a log
-sample captured by running the exploit script against the vulnerable branch state
+[`security/detections/sample-vulnerable.jsonl`](security/detections/sample-vulnerable.jsonl),
+a log sample captured by running the exploit script against the vulnerable branch state
 (post-logging, pre-fix): the rule isolates exactly the two cross-owner grants and
 nothing else. Re-verified live against the fixed state: the same exploit run now 404s
 on the cross-owner IDs, and the rule finds an empty set.

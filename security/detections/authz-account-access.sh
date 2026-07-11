@@ -13,11 +13,11 @@
 #
 # Usage: feed it a file of newline-delimited security-log JSON lines
 # (app stdout, or a captured sample):
-#   ./detections/authz-account-access.sh detections/sample-vulnerable.jsonl
+#   ./security/detections/authz-account-access.sh security/detections/sample-vulnerable.jsonl
 # or pipe app stdout directly (index.ts also prints a plain-text startup
 # banner before the JSON lines start, so this reads raw lines and skips
 # anything that doesn't parse as JSON rather than aborting on it):
-#   npm run dev | ./detections/authz-account-access.sh
+#   npm run dev | ./security/detections/authz-account-access.sh
 #
 # Output: one JSON object per flagged cross-owner grant, or nothing if none
 # are found (the expected result against the fixed state).

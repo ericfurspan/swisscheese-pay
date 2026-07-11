@@ -118,7 +118,7 @@ describe('accounts routes', () => {
 
     // fix/phase-1-bola: ownership predicate restored, so a cross-owner read
     // 404s and this logs outcome=denied. vuln/phase-1-bola's commit logs
-    // outcome=success for the same request instead -- see the detections/
+    // outcome=success for the same request instead -- see the security/detections/
     // rule and sample-vulnerable.jsonl for that state.
     it('logs outcome=denied with a mismatched owner_user_id for a cross-owner read', async () => {
       const agent = await loginAsAlice()
