@@ -94,10 +94,10 @@ separate, later vuln phase.)
 ### Detection
 [`detections/authz-account-access.sh`](detections/authz-account-access.sh) flags any
 `authz.account_access` log line where `outcome == "success"` **and**
-`actor_user_id != detail.owner_user_id`. The `authz.account_access` event
+`actor_user_id != owner_user_id`. The `authz.account_access` event
 (`server/src/log/security.ts`, emitted from a shared `loadAccountForRead` helper in
 `server/src/routes/accountAccess.ts`) fires once per existing-account read in both the
-vulnerable and fixed states, with `detail.owner_user_id` sourced from a dedicated
+vulnerable and fixed states, with `owner_user_id` sourced from a dedicated
 owner lookup that's independent of the (possibly broken) ownership predicate, so the
 true owner is always known even while the gate itself is compromised. Filtering on the
 actor/owner mismatch, not merely the event's presence, matters: every ordinary
@@ -107,6 +107,6 @@ same-owner read also logs `outcome == "success"`, and would false-positive on a 
 Validated against
 [`detections/sample-vulnerable.jsonl`](detections/sample-vulnerable.jsonl), a log
 sample captured by running the exploit script against the vulnerable branch state
-(post-logging, pre-fix): the rule isolates exactly the three cross-owner grants and
+(post-logging, pre-fix): the rule isolates exactly the two cross-owner grants and
 nothing else. Re-verified live against the fixed state: the same exploit run now 404s
 on the cross-owner IDs, and the rule finds an empty set.
