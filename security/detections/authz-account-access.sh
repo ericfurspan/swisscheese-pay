@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Phase 1 -- BOLA detection rule for authz.account_access (Task 3).
+# Phase 1 -- BOLA detection rule for authz.account_access.
 #
 # The security logger emits one authz.account_access JSON line per existing-
 # account read (server/src/routes/accountAccess.ts), in both the vulnerable
