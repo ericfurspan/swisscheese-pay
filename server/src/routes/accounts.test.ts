@@ -34,6 +34,12 @@ function userId(email: string): number {
   return (getDb().prepare('SELECT id FROM users WHERE email = ?').get(email) as IdRow).id
 }
 
+function accessLogLines(logSpy: { mock: { calls: unknown[][] } }) {
+  return logSpy.mock.calls
+    .map((call) => JSON.parse(call[0] as string))
+    .filter((line) => line.event === 'authz.account_access')
+}
+
 describe('accounts routes', () => {
   it('requires authentication', async () => {
     const res = await request(createApp()).get('/api/accounts')
@@ -140,9 +146,7 @@ describe('accounts routes', () => {
       const id = accountId('CHK-1001')
       await agent.get(`/api/accounts/${id}/transactions`)
 
-      const accessLines = logSpy.mock.calls
-        .map((call) => JSON.parse(call[0] as string))
-        .filter((line) => line.event === 'authz.account_access')
+      const accessLines = accessLogLines(logSpy)
       expect(accessLines).toHaveLength(1)
       expect(accessLines[0]).toMatchObject({ target: `account:${id}`, outcome: 'success' })
       logSpy.mockRestore()
@@ -155,10 +159,7 @@ describe('accounts routes', () => {
       const res = await agent.get('/api/accounts/999999')
 
       expect(res.status).toBe(404)
-      const accessLines = logSpy.mock.calls
-        .map((call) => JSON.parse(call[0] as string))
-        .filter((line) => line.event === 'authz.account_access')
-      expect(accessLines).toHaveLength(0)
+      expect(accessLogLines(logSpy)).toHaveLength(0)
       logSpy.mockRestore()
     })
   })

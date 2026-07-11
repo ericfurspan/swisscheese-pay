@@ -25,7 +25,5 @@ set -euo pipefail
 INPUT="${1:-/dev/stdin}"
 
 jq -c '
-  select(.event == "authz.account_access")
-  | select(.outcome == "success")
-  | select(.actor_user_id != .owner_user_id)
+  select(.event == "authz.account_access" and .outcome == "success" and .actor_user_id != .owner_user_id)
 ' "$INPUT"

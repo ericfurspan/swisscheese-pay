@@ -25,14 +25,6 @@ export function listAccountsForUser(db: Database.Database, uid: number): Account
     .all(uid) as AccountDTO[]
 }
 
-// Dedicated ownership check for transfers.ts's source-account gate. Kept
-// independent of getAccountForUser so Phase 1's BOLA vuln (account/transaction
-// reads only) can't incidentally break transfer authz -- money-movement bugs
-// are a separate, later vuln phase.
-export function isAccountOwnedByUser(db: Database.Database, accountId: number, uid: number): boolean {
-  return db.prepare('SELECT 1 FROM accounts WHERE id = ? AND user_id = ?').get(accountId, uid) !== undefined
-}
-
 interface OwnerRow {
   user_id: number
 }
@@ -46,6 +38,14 @@ export function getAccountOwnerId(db: Database.Database, accountId: number): num
     | OwnerRow
     | undefined
   return row?.user_id
+}
+
+// Dedicated ownership check for transfers.ts's source-account gate. Kept
+// independent of getAccountForUser so Phase 1's BOLA vuln (account/transaction
+// reads only) can't incidentally break transfer authz -- money-movement bugs
+// are a separate, later vuln phase.
+export function isAccountOwnedByUser(db: Database.Database, accountId: number, uid: number): boolean {
+  return getAccountOwnerId(db, accountId) === uid
 }
 
 // The ownership check that keeps this a "secure baseline" -- returning a row
