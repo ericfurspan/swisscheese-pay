@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3'
-import { getAccountForUser } from './accounts.js'
+import { isAccountOwnedByUser } from './accounts.js'
 
 export type TransferFailureReason =
   | 'not_owner'
@@ -22,7 +22,7 @@ class InvalidDestinationError extends Error {}
 export function transfer(db: Database.Database, input: TransferInput): TransferResult {
   const { fromId, toId, amountCents, uid } = input
 
-  if (!getAccountForUser(db, fromId, uid)) {
+  if (!isAccountOwnedByUser(db, fromId, uid)) {
     return { ok: false, reason: 'not_owner' }
   }
 

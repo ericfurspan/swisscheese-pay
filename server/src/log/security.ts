@@ -4,6 +4,7 @@ export type SecurityEvent =
   | 'auth.login.failure'
   | 'auth.logout'
   | 'authz.deny'
+  | 'authz.account_access'
   | 'transfer.initiated'
   | 'transfer.completed'
   | 'transfer.failed'
