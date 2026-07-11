@@ -37,7 +37,9 @@ describe('accounts service', () => {
   it('returns an account only when owned by the given user', () => {
     const db = setup()
     expect(getAccountForUser(db, 1, 1)).toBeDefined()
-    expect(getAccountForUser(db, 1, 2)).toBeUndefined()
+    // BOLA (vuln/phase-1-bola): ownership predicate removed, so a foreign
+    // uid still gets the row back. Restored in fix/phase-1-bola.
+    expect(getAccountForUser(db, 1, 2)).toBeDefined()
   })
 
   it('excludes user_id from the returned account DTO', () => {

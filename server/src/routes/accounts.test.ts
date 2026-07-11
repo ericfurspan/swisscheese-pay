@@ -60,12 +60,16 @@ describe('accounts routes', () => {
     expect(res.body).not.toHaveProperty('user_id')
   })
 
-  it("returns 404 for another user's account (no existence leak)", async () => {
+  // BOLA (vuln/phase-1-bola): the ownership predicate is removed, so a
+  // cross-owner read now succeeds and leaks foreign account data. Restored
+  // in fix/phase-1-bola.
+  it("returns another user's account for a cross-owner request", async () => {
     const agent = await loginAsAlice()
 
     const res = await agent.get(`/api/accounts/${accountId('CHK-2001')}`)
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(200)
+    expect(res.body.account_number).toBe('CHK-2001')
   })
 
   it('returns transactions for an owned account', async () => {
@@ -77,11 +81,14 @@ describe('accounts routes', () => {
     expect(res.body.length).toBeGreaterThan(0)
   })
 
-  it("returns 404 for another user's account transactions", async () => {
+  // BOLA (vuln/phase-1-bola): same choke point as the account read above —
+  // cross-owner transactions leak too. Restored in fix/phase-1-bola.
+  it("returns another user's account transactions for a cross-owner request", async () => {
     const agent = await loginAsAlice()
 
     const res = await agent.get(`/api/accounts/${accountId('CHK-2001')}/transactions`)
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBeGreaterThan(0)
   })
 })
