@@ -67,6 +67,18 @@ describe('profile routes', () => {
     expect(bob.full_name).toBe('Bob Brown')
   })
 
+  it('lets a customer set their own role via the request body (mass assignment) -- tightened at fix/phase-2-mass-assignment', async () => {
+    const agent = await loginAsAlice()
+
+    const res = await agent.patch('/api/profile').send({ full_name: 'Alice Anderson', role: 'admin' })
+    expect(res.status).toBe(200)
+
+    const alice = getDb().prepare('SELECT role FROM users WHERE email = ?').get('alice@scpay.test') as {
+      role: string
+    }
+    expect(alice.role).toBe('admin')
+  })
+
   it('treats a validly-signed token for a since-deleted user as unauthenticated', async () => {
     // Simulates a session that outlives its user row -- e.g. the DB reseeds
     // (as it does on every container boot) while a still-unexpired cookie
