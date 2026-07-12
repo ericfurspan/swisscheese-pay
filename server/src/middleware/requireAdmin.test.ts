@@ -8,7 +8,7 @@ function buildTestApp(role: string) {
   app.get(
     '/protected',
     (req, _res, next) => {
-      req.user = { uid: role === 'admin' ? 3 : 1, role }
+      req.user = { uid: role === 'admin' ? 3 : 1, role, jti: 'test-jti' }
       next()
     },
     requireAdmin,

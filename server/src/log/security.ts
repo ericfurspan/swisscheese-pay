@@ -3,6 +3,7 @@ export type SecurityEvent =
   | 'auth.login.success'
   | 'auth.login.failure'
   | 'auth.logout'
+  | 'auth.token_used'
   | 'authz.deny'
   | 'authz.account_access'
   | 'transfer.initiated'

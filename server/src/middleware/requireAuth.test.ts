@@ -41,13 +41,30 @@ describe('requireAuth', () => {
 
   it('populates req.user for a valid session cookie', async () => {
     const app = buildTestApp()
-    const token = signToken({ uid: 1, role: 'customer' })
+    const { token } = signToken({ uid: 1, role: 'customer' })
 
     const res = await request(app)
       .get('/protected')
       .set('Cookie', [`${SESSION_COOKIE}=${token}`])
 
     expect(res.status).toBe(200)
-    expect(res.body.user).toEqual({ uid: 1, role: 'customer' })
+    expect(res.body.user).toMatchObject({ uid: 1, role: 'customer' })
+    expect(typeof res.body.user.jti).toBe('string')
+  })
+
+  it("logs auth.token_used with the token's jti on a successful request", async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const app = buildTestApp()
+    const { token, jti } = signToken({ uid: 1, role: 'customer' })
+
+    await request(app)
+      .get('/protected')
+      .set('Cookie', [`${SESSION_COOKIE}=${token}`])
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'auth.token_used')
+    expect(line).toMatchObject({ actor_user_id: 1, outcome: 'success', jti })
+    logSpy.mockRestore()
   })
 })

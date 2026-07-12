@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 
 // No fallback: a committed default secret is forgeable by anyone with repo access,
@@ -16,19 +17,27 @@ const JWT_SECRET = requireSecret()
 export interface TokenPayload {
   uid: number
   role: string
+  jti: string
 }
 
-export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })
+export interface SignedToken {
+  token: string
+  jti: string
+}
+
+export function signToken(payload: { uid: number; role: string }): SignedToken {
+  const jti = randomUUID()
+  const token = jwt.sign({ ...payload, jti }, JWT_SECRET, { expiresIn: '1h' })
+  return { token, jti }
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
     const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] })
     if (typeof decoded === 'string') return null
-    const { uid, role } = decoded as jwt.JwtPayload & Partial<TokenPayload>
-    if (typeof uid !== 'number' || typeof role !== 'string') return null
-    return { uid, role }
+    const { uid, role, jti } = decoded as jwt.JwtPayload & Partial<TokenPayload>
+    if (typeof uid !== 'number' || typeof role !== 'string' || typeof jti !== 'string') return null
+    return { uid, role, jti }
   } catch {
     return null
   }
