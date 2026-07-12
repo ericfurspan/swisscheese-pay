@@ -13,9 +13,19 @@ real-world impact: business-logic flaws around money movement, and access-contro
 that leak another user's balance, transaction history, or SSN, carry stakes that a
 task-board or CRM clone can't.
 
-**The code currently in `main` is Phase 0 — a working, secure baseline with no
-deliberate vulnerabilities.** Later phases introduce a focused set of vulnerabilities
-behind toggles, each taken through the loop described below.
+## Status
+
+| Phase | Vulnerability class | Status |
+|---|---|---|
+| 0 | Secure scaffold | Done |
+| 1 | Broken object-level access control (BOLA/IDOR) | Done |
+| 2 | Mass assignment / excessive data exposure | Done |
+| 3 | Money-movement business logic (races, replay, negative-amount, tampered recipient) | Done |
+| 4 | JWT attacks (weak secret, forged tokens) | Done |
+| 5 | Standard web-vuln breadth (stored XSS, CSRF, open redirect, clickjacking, CORS) | Planned, post-v1 |
+
+Every phase is taken through the four-part loop below and documented in
+[`VULNS.md`](./VULNS.md).
 
 ## The four-part loop
 
@@ -43,14 +53,14 @@ generic OWASP-Top-10 web vulns are kept for breadth but aren't the point:
 - **Money-movement business logic.** Race conditions on concurrent transfers, replay of
   a transfer request, negative-amount and tampered-recipient transfers — the class of
   bug most absent from generic vuln-bank clones.
-- **JWT attacks from the attacker's side.** `alg:none`, weak signing secrets, forging a
-  token to impersonate another user or escalate to admin.
+- **JWT attacks from the attacker's side.** Weak signing secrets cracked via offline
+  dictionary attack, forging a token to impersonate another user or escalate to admin.
 - **Excessive data exposure / mass assignment.** Over-returned sensitive fields;
   `role`/`balance` writable via unexpected request fields.
 
 Standard web-vuln coverage (stored XSS, CSRF, open redirect, clickjacking, CORS
-misconfiguration, client-side-only authz) is retained underneath for OWASP breadth, but
-built as a thinner pass.
+misconfiguration, client-side-only authz) is planned for Phase 5, post-v1 — not yet
+built.
 
 ## Architecture
 
@@ -85,6 +95,41 @@ Then visit `http://127.0.0.1:8082`. Seeded logins (all password `Password123!`):
 
 Without Docker: `npm install && npm run build && npm run dev` (server serves the built
 client at the same URL above).
+
+## Demo the vulnerabilities
+
+Each vulnerability is a paired `vuln/*` / `fix/*` git tag. Check out a tag, rebuild, run
+the matching exploit script, then repeat against its `fix/*` counterpart (or `main`, which
+carries the same fix) to see the difference:
+
+```
+git checkout vuln/phase-4-jwt
+make up                                   # rebuilds the container from this checkout
+node security/exploits/phase-4-jwt.mjs    # succeeds: secret cracked, tokens forged
+make down
+
+git checkout fix/phase-4-jwt              # or: git checkout main
+make up
+node security/exploits/phase-4-jwt.mjs    # fails: crack step exhausts the wordlist
+make down
+
+git checkout main
+```
+
+The other five vulnerabilities follow the same checkout / `make up` / run / `make down`
+pattern:
+
+| Vulnerability | Vulnerable tag | Fixed tag | Exploit script |
+|---|---|---|---|
+| BOLA / IDOR | `vuln/phase-1-bola` | `fix/phase-1-bola` | `security/exploits/phase-1-bola.sh` |
+| Mass assignment | `vuln/phase-2-mass-assignment` | `fix/phase-2-mass-assignment` | `security/exploits/phase-2-mass-assignment.sh` |
+| Money-movement race + idempotency replay | `vuln/phase-3-concurrency` | `fix/phase-3-concurrency` | `security/exploits/phase-3-concurrency.mjs` |
+| Negative-amount transfer | `vuln/phase-3-negative-amount` | `fix/phase-3-negative-amount` | `security/exploits/phase-3-negative-amount.sh` |
+| Tampered payment-link recipient | `vuln/phase-3-tampered-recipient` | `fix/phase-3-tampered-recipient` | `security/exploits/phase-3-tampered-recipient.sh` |
+| JWT weak-secret cracking | `vuln/phase-4-jwt` | `fix/phase-4-jwt` | `security/exploits/phase-4-jwt.mjs` |
+
+Each script's expected output and the matching detection rule are documented per-vuln
+in [`VULNS.md`](./VULNS.md).
 
 ## Safety
 
