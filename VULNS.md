@@ -403,3 +403,91 @@ the branch at different points but neither interacts with the other):
 Re-verified live against each fix: the negative-amount exploit is now rejected (`400`,
 no balances change) and Rule 1 is empty against a fresh capture; the tampered-recipient
 exploit now correctly credits bob and Rule 2 is empty against a fresh capture.
+
+## JWT weak-secret cracking → impersonation and privilege escalation
+
+**OWASP / CWE:** A02 Cryptographic Failures / A07 Identification and Authentication
+Failures · CWE-321 (Use of Hard-coded Cryptographic Key, applied to a config-set weak
+value rather than a literal in code) / CWE-330 (Use of Insufficiently Random Values).
+**Phase introduced:** Phase 4.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-4-jwt`, the
+vulnerability is introduced at tag `vuln/phase-4-jwt` (commit `de4d8f7`) and fixed at tag
+`fix/phase-4-jwt` (commit `3722e11`). `main` receives only the fixed state via `git merge
+--no-ff`; both tags and the branch are kept locally. This is a config-drift vuln, not a
+code regression: neither `docker-entrypoint.sh`'s strong-random-secret auto-generation
+nor `token.ts`'s fail-closed `requireSecret()` check was weakened — the vuln commit only
+sets an explicit weak value in `docker-compose.yml`, overriding the safe default exactly
+the way the file's own comment already invited ("set it explicitly... for session
+continuity across restarts"). `alg:none` is already structurally prevented in this
+codebase (`verifyToken` pins `algorithms: ['HS256']`) and was out of scope for this
+phase — one well-developed weak-secret example, not the full three-technique JWT list.
+
+### Exploit
+[`security/exploits/phase-4-jwt.mjs`](security/exploits/phase-4-jwt.mjs) (Node, using
+the `jsonwebtoken` library directly for local signing/verification, not just HTTP calls)
+runs as a real, unprivileged seeded customer (alice) with no special access:
+
+1. Logs in normally and captures her own session cookie's JWT.
+2. Cracks the signing secret via an **offline dictionary attack** against
+   [`security/exploits/phase-4-jwt-wordlist.txt`](security/exploits/phase-4-jwt-wordlist.txt)
+   (~39 realistic weak/default candidates, not a scraped breach corpus) — no network
+   calls in this step, pure local `jwt.verify()` attempts, the same technique real tools
+   like `jwt_tool` or `hashcat` mode 16500 use against a captured token.
+3. Once cracked, forges two tokens with the recovered secret: one for another user's
+   uid (enumerated in a small range, same technique Phase 1's BOLA exploit used) to read
+   that user's real private account data via `GET /api/accounts`; one claiming
+   `role: 'admin'` for alice's own uid (decoded from her own real token, no cracking
+   needed to read your own claims) to hit `GET /api/admin/users`, despite her real DB
+   role being `customer`.
+
+### Root cause
+One cause (`docker-compose.yml`'s explicit weak `JWT_SECRET`, `vuln/phase-4-jwt`'s
+commit), two forgeries. The HMAC-SHA256 signature over `{uid, role, jti}` is crackable
+via offline dictionary attack in seconds once a low-entropy secret is in play. Once the
+secret is known, `jwt.sign` with that secret produces a token indistinguishable from a
+legitimately-issued one to `verifyToken` — `token.ts`'s validation logic isn't buggy in
+isolation (it correctly checks signature and algorithm), but a weak secret makes the
+signature guarantee worthless. Anyone holding the cracked secret controls both fields in
+`TokenPayload` independently: `uid` (→ impersonation of any user) and `role` (→
+escalation to admin).
+
+### Fix
+Commit `3722e11`, two parts:
+
+1. `docker-compose.yml`'s `JWT_SECRET` reverts to unset, so `docker-entrypoint.sh`'s
+   strong random 32-byte auto-generation applies again.
+2. `token.ts`'s `requireSecret()` gains a minimum-length guard (rejects anything under
+   32 characters) as defense-in-depth, so an explicit weak value gets rejected outright
+   even if the same config mistake recurs later. This doesn't make HMAC-SHA256 secure by
+   itself — a 32-character low-entropy string is still weak — but it closes off the
+   specific "someone typed a short memorable string" mistake this phase demonstrated.
+
+No change to `verifyToken`'s validation logic itself; it was already correct. The secret
+it validated against was the actual bug.
+
+### Detection
+New instrumentation was required here, unlike Phase 1-3: JWTs are stateless, so there
+was no existing independent ground truth for "was this specific token legitimately
+issued." `signToken` (`server/src/auth/token.ts`) now generates a `jti`
+(`crypto.randomUUID()`) per token. `auth.ts`'s `/register` and `/login` handlers log the
+new token's `jti` in their existing `auth.register`/`auth.login.success` events (the
+"issued" ledger). `requireAuth` — the single existing choke point for every
+authenticated request — logs a new `auth.token_used` event with the token's `jti` on
+every successful check (the "used" ledger).
+
+[`security/detections/jwt-forged-token.sh`](security/detections/jwt-forged-token.sh)
+flags any `jti` appearing in the "used" ledger that never appears in the "issued"
+ledger — true regardless of what the forged token claims, since a legitimate `jti` is a
+fresh random UUID chosen only at real signing time, so one rule catches both the
+impersonation and escalation forgeries. Validated against
+[`security/detections/sample-vulnerable-phase4-jwt.jsonl`](security/detections/sample-vulnerable-phase4-jwt.jsonl),
+a log sample captured by running the exploit script against the vulnerable branch state:
+the rule isolates exactly the two forged-token lines and none of alice's legitimate
+activity. Re-verified live against the fixed state: the exploit's crack step fails
+outright (wordlist exhausted, no forgery possible), and the rule is empty against a
+fresh capture.
+
+**Residual limitation, documented rather than solved:** a forger who can observe a real
+`jti` in transit (not just crack an offline-captured token) could reuse it and evade
+this detection — a materially stronger threat model (network position, not just secret
+cracking) than what this phase targets.
