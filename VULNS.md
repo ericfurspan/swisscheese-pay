@@ -47,10 +47,14 @@ artifact (no live SIEM in this build).
 User-Controlled Key) / CWE-284.
 **Phase introduced:** Phase 1.
 **Toggle:** git structure, not a runtime flag; no `if (vulnMode)` or env var ever lands
-in app code. Within branch `phase-1-bola`, the vulnerability is introduced at tag
-`vuln/phase-1-bola` (commit `127c28d1`) and fixed at tag `fix/phase-1-bola` (commit
-`8ae2737f`). `main` receives only the fixed state via `git merge --no-ff`; both tags
-and the branch are kept locally so either state stays `git checkout`-able.
+in app code. Within branch `phase-1-bola`, `vuln/phase-1-bola` (commit `dd21fec`) is the
+runnable vulnerable demonstration state — vulnerable code plus the exploit script and
+detection rule that exercise it — and `fix/phase-1-bola` (commit `8ae2737f`) is the
+matching fixed demonstration state. The vulnerability itself was originally introduced
+at commit `127c28d1`; `vuln/phase-1-bola` points a few commits past that, at the point
+the full exploit → detect loop became runnable from a single checkout. `main` receives
+only the fixed state via `git merge --no-ff`; both tags and the branch are kept locally
+so either state stays `git checkout`-able.
 
 ### Exploit
 
@@ -123,10 +127,13 @@ mass-assignment half; A01 / CWE-213 (Exposure of Sensitive Information Due to
 Incompatible Policies) for the data-exposure half.
 **Phase introduced:** Phase 2.
 **Toggle:** git structure, not a runtime flag. Within branch `phase-2-mass-assignment`,
-both vulnerable pieces are live as of tag `vuln/phase-2-mass-assignment` (commit
-`2cf30d2`) and both are fixed at tag `fix/phase-2-mass-assignment` (commit `e259c09`).
-`main` receives only the fixed state via `git merge --no-ff`; both tags and the branch
-are kept locally.
+`vuln/phase-2-mass-assignment` (commit `d34f37f`) is the runnable vulnerable
+demonstration state for both vulnerable pieces — vulnerable code plus the exploit
+script and detection rule — and `fix/phase-2-mass-assignment` (commit `e259c09`) is the
+matching fixed state. The two pieces were originally introduced at commits `2cf30d2`
+(excessive data exposure) and `c4d0ae7` (mass-assignment role write); `vuln/phase-2-mass-assignment`
+points past both, at the point the demonstration became runnable. `main` receives only
+the fixed state via `git merge --no-ff`; both tags and the branch are kept locally.
 
 ### Exploit
 
@@ -218,9 +225,13 @@ return an empty set against a fresh capture.
 Execution using Shared Resource with Improper Synchronization).
 **Phase introduced:** Phase 3.
 **Toggle:** git structure, not a runtime flag. Within branch `phase-3-money-movement`,
-the vulnerability is introduced at tag `vuln/phase-3-concurrency` (commit `36af5fa`) and
-fixed at tag `fix/phase-3-concurrency` (commit `1c5e8fb`). `main` receives only the
-fixed state via `git merge --no-ff`; both tags and the branch are kept locally.
+`vuln/phase-3-concurrency` (commit `e1d6d6f`) is the runnable vulnerable demonstration
+state — vulnerable code plus the exploit script and detection rule — and
+`fix/phase-3-concurrency` (commit `1c5e8fb`) is the matching fixed state. The
+vulnerability was originally introduced at commit `36af5fa`; `vuln/phase-3-concurrency`
+points a few commits past that, at the point the demonstration became runnable. `main`
+receives only the fixed state via `git merge --no-ff`; both tags and the branch are
+kept locally.
 
 ### Exploit
 
@@ -337,9 +348,12 @@ negative-amount bug; CWE-841 (Improper Enforcement of Behavioral Workflow) for t
 tampered-recipient bug.
 **Phase introduced:** Phase 3.
 **Toggle:** git structure, not a runtime flag. Within branch `phase-3-money-movement`,
-negative-amount is introduced at tag `vuln/phase-3-negative-amount` (commit `5535d83`)
-and fixed at tag `fix/phase-3-negative-amount` (commit `16b4d4d`); tampered-recipient is
-introduced at tag `vuln/phase-3-tampered-recipient` (commit `2519c56`) and fixed at tag
+`vuln/phase-3-negative-amount` (commit `86a5f25`) is the runnable vulnerable
+demonstration state for negative-amount — vulnerable code plus the exploit script and
+detection rule — originally introduced at commit `5535d83`, and fixed at tag
+`fix/phase-3-negative-amount` (commit `16b4d4d`); `vuln/phase-3-tampered-recipient`
+(commit `f39cadb`) is the runnable demonstration state for tampered-recipient,
+originally introduced at commit `2519c56`, and fixed at tag
 `fix/phase-3-tampered-recipient` (commit `61261ba`). These are two independent bugs on
 the money-movement surface, not chained into each other (unlike Phase 2's
 mass-assignment/data-exposure pair) — each has its own vuln→fix cycle, sequential on the
@@ -432,11 +446,14 @@ exploit now correctly credits bob and Rule 2 is empty against a fresh capture.
 Failures · CWE-321 (Use of Hard-coded Cryptographic Key, applied to a config-set weak
 value rather than a literal in code) / CWE-330 (Use of Insufficiently Random Values).
 **Phase introduced:** Phase 4.
-**Toggle:** git structure, not a runtime flag. Within branch `phase-4-jwt`, the
-vulnerability is introduced at tag `vuln/phase-4-jwt` (commit `de4d8f7`) and fixed at tag
-`fix/phase-4-jwt` (commit `3722e11`). `main` receives only the fixed state via `git merge
---no-ff`; both tags and the branch are kept locally. This is a config-drift vuln, not a
-code regression: neither `docker-entrypoint.sh`'s strong-random-secret auto-generation
+**Toggle:** git structure, not a runtime flag. Within branch `phase-4-jwt`,
+`vuln/phase-4-jwt` (commit `533a42b`) is the runnable vulnerable demonstration state —
+vulnerable code plus the exploit script and detection rule — and `fix/phase-4-jwt`
+(commit `3722e11`) is the matching fixed state. The vulnerability itself was originally
+introduced at commit `de4d8f7`; `vuln/phase-4-jwt` points a few commits past that, at
+the point the demonstration became runnable. `main` receives only the fixed state via
+`git merge --no-ff`; both tags and the branch are kept locally. This is a config-drift
+vuln, not a code regression: neither `docker-entrypoint.sh`'s strong-random-secret auto-generation
 nor `token.ts`'s fail-closed `requireSecret()` check was weakened — the vuln commit only
 sets an explicit weak value in `docker-compose.yml`, overriding the safe default exactly
 the way the file's own comment already invited ("set it explicitly... for session
@@ -465,8 +482,8 @@ runs as a real, unprivileged seeded customer (alice) with no special access:
 
 ### Root cause
 
-One cause (`docker-compose.yml`'s explicit weak `JWT_SECRET`, `vuln/phase-4-jwt`'s
-commit), two forgeries. The HMAC-SHA256 signature over `{uid, role, jti}` is crackable
+One cause (`docker-compose.yml`'s explicit weak `JWT_SECRET`, introduced at commit
+`de4d8f7`), two forgeries. The HMAC-SHA256 signature over `{uid, role, jti}` is crackable
 via offline dictionary attack in seconds once a low-entropy secret is in play. Once the
 secret is known, `jwt.sign` with that secret produces a token indistinguishable from a
 legitimately-issued one to `verifyToken` — `token.ts`'s validation logic isn't buggy in
@@ -515,11 +532,13 @@ forged token's `jti` is real, but not real _for that uid/role_, and the rule rep
 those independently, so one rule still catches both the impersonation (`uid` mismatch)
 and escalation (`role` mismatch) forgeries. Validated against
 [`security/detections/sample-vulnerable-phase4-jwt.jsonl`](security/detections/sample-vulnerable-phase4-jwt.jsonl):
-the rule isolates the two unseen-`jti` lines, the reused-`jti` role-escalation line, and
-the reused-`jti` impersonation line — four flags total — and none of alice's legitimate
-activity, nor a reused-`jti` case where the issuance record predates `role` being logged
-(treated as unverifiable on `role` alone, not a forced mismatch, so it doesn't
-false-positive on tokens issued just before this schema change deployed — though a
-`uid` mismatch on that same legacy record is still caught). Re-verified live against the
+the rule isolates the two unseen-`jti` lines, the reused-`jti` role-escalation line, the
+reused-`jti` impersonation line, and a second reused-`jti` impersonation line against a
+legacy pre-role-logging issuance record — five flags total — and none of alice's
+legitimate activity, nor the one same-`jti`/same-`uid` line on that same legacy record
+(issuance predates `role` being logged, so `role` alone is treated as unverifiable there,
+not a forced mismatch — it doesn't false-positive on tokens issued just before this
+schema change deployed — though the `uid` mismatch on that other line against the same
+legacy record is still caught, which is the fifth flag above). Re-verified live against the
 fixed state: the exploit's crack step fails outright (wordlist exhausted, no forgery
 possible), and the rule is empty against a fresh capture.
