@@ -16,6 +16,7 @@ export interface Transaction {
 
 export interface PaymentLink {
   id: number
+  account_id: number
   token: string
   amount_cents: number
   note: string | null

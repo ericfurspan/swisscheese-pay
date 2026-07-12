@@ -40,6 +40,7 @@ CREATE TABLE transfers (
 CREATE TABLE payment_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
+  account_id INTEGER NOT NULL REFERENCES accounts(id),
   token TEXT UNIQUE NOT NULL,         -- public link identifier, not a session credential
   amount_cents INTEGER NOT NULL,
   note TEXT,
