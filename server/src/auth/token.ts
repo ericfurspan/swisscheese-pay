@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 
 // No fallback: a committed default secret is forgeable by anyone with repo access,
@@ -5,9 +6,18 @@ import jwt from 'jsonwebtoken'
 // of sync with however the app actually gets deployed. JWT_SECRET is always required;
 // local dev/test convenience is provided by tooling (see server/package.json "dev"
 // script, and vitest.config.ts for tests), never by a literal in this file.
+// fix/phase-4-jwt: also rejects a too-short secret. This doesn't make HMAC-SHA256
+// secure by itself (a 32-char low-entropy string is still weak), but it closes off
+// the specific "someone typed a short memorable string" mistake vuln/phase-4-jwt
+// demonstrated -- see docs/superpowers/specs/2026-07-12-phase-4-jwt-design.md §3.
+const MIN_SECRET_LENGTH = 32
+
 function requireSecret(): string {
   const secret = process.env.JWT_SECRET
   if (!secret) throw new Error('JWT_SECRET must be set')
+  if (secret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`JWT_SECRET must be at least ${MIN_SECRET_LENGTH} characters (got ${secret.length})`)
+  }
   return secret
 }
 
@@ -16,19 +26,27 @@ const JWT_SECRET = requireSecret()
 export interface TokenPayload {
   uid: number
   role: string
+  jti: string
 }
 
-export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })
+export interface SignedToken {
+  token: string
+  jti: string
+}
+
+export function signToken(payload: { uid: number; role: string }): SignedToken {
+  const jti = randomUUID()
+  const token = jwt.sign({ ...payload, jti }, JWT_SECRET, { expiresIn: '1h' })
+  return { token, jti }
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
     const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] })
     if (typeof decoded === 'string') return null
-    const { uid, role } = decoded as jwt.JwtPayload & Partial<TokenPayload>
-    if (typeof uid !== 'number' || typeof role !== 'string') return null
-    return { uid, role }
+    const { uid, role, jti } = decoded as jwt.JwtPayload & Partial<TokenPayload>
+    if (typeof uid !== 'number' || typeof role !== 'string' || typeof jti !== 'string') return null
+    return { uid, role, jti }
   } catch {
     return null
   }

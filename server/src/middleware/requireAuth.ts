@@ -21,5 +21,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   req.user = payload
+  logSecurity({
+    event: 'auth.token_used',
+    actor_user_id: payload.uid,
+    outcome: 'success',
+    request_id: req.id,
+    ip: req.ip,
+    detail: { jti: payload.jti },
+  })
   next()
 }

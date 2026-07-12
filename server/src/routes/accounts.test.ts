@@ -104,7 +104,7 @@ describe('accounts routes', () => {
       const res = await agent.get(`/api/accounts/${id}`)
 
       expect(res.status).toBe(200)
-      const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
+      const line = accessLogLines(logSpy)[0]
       expect(line).toMatchObject({
         event: 'authz.account_access',
         actor_user_id: userId('alice@scpay.test'),
@@ -128,7 +128,7 @@ describe('accounts routes', () => {
       const res = await agent.get(`/api/accounts/${id}`)
 
       expect(res.status).toBe(404)
-      const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
+      const line = accessLogLines(logSpy)[0]
       expect(line).toMatchObject({
         event: 'authz.account_access',
         actor_user_id: userId('alice@scpay.test'),

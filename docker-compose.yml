@@ -9,6 +9,10 @@ services:
       - HOST=0.0.0.0
       # JWT_SECRET is intentionally not set here -- docker-entrypoint.sh
       # generates a fresh random one at boot when it's absent, so no secret
-      # ends up committed to this file. Set it explicitly (e.g. via a .env
-      # file) if you need session continuity across restarts.
+      # ends up committed to this file. fix/phase-4-jwt: an explicit value
+      # was set here for QA session continuity and never rotated out --
+      # see server/src/auth/token.ts's requireSecret() for the
+      # defense-in-depth length guard added alongside this revert. Set
+      # JWT_SECRET explicitly (e.g. via a .env file, ≥32 characters) only
+      # if you specifically need session continuity across restarts.
     restart: unless-stopped

@@ -85,7 +85,7 @@ describe('profile routes', () => {
     // Simulates a session that outlives its user row -- e.g. the DB reseeds
     // (as it does on every container boot) while a still-unexpired cookie
     // from a prior boot is presented.
-    const staleToken = signToken({ uid: 999_999, role: 'customer' })
+    const { token: staleToken } = signToken({ uid: 999_999, role: 'customer' })
 
     const res = await request(createApp())
       .get('/api/profile')
@@ -95,7 +95,7 @@ describe('profile routes', () => {
   })
 
   it('rejects a profile update for a since-deleted user rather than reporting false success', async () => {
-    const staleToken = signToken({ uid: 999_999, role: 'customer' })
+    const { token: staleToken } = signToken({ uid: 999_999, role: 'customer' })
 
     const res = await request(createApp())
       .patch('/api/profile')

@@ -119,6 +119,37 @@ describe('auth routes', () => {
     expect(protectedRes.status).toBe(401)
   })
 
+  it('logs a jti on auth.register', async () => {
+    const app = createApp()
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'jti-register@scpay.test', password: 'Sup3rSecret!', full_name: 'Jti Register' })
+
+    const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
+    expect(typeof line.jti).toBe('string')
+    logSpy.mockRestore()
+  })
+
+  it('logs a jti on auth.login.success', async () => {
+    const app = createApp()
+    await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'jti-login@scpay.test', password: 'Sup3rSecret!', full_name: 'Jti Login' })
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'jti-login@scpay.test', password: 'Sup3rSecret!' })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'auth.login.success')
+    expect(typeof line.jti).toBe('string')
+    logSpy.mockRestore()
+  })
+
   it('logs auth.logout with the same field set as other security events', async () => {
     const app = buildAppWithProtectedTestRoute()
     const agent = request.agent(app)

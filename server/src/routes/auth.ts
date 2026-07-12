@@ -65,7 +65,7 @@ authRouter.post('/register', (req, res) => {
     .run(email, passwordHash, fullName, fabricatedSsn(), 'customer')
 
   const uid = Number(lastInsertRowid)
-  const token = signToken({ uid, role: 'customer' })
+  const { token, jti } = signToken({ uid, role: 'customer' })
   res.cookie(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS)
   logSecurity({
     event: 'auth.register',
@@ -73,6 +73,7 @@ authRouter.post('/register', (req, res) => {
     outcome: 'success',
     request_id: req.id,
     ip: req.ip,
+    detail: { jti },
   })
   res.status(201).json({ id: uid, email, full_name: fullName })
 })
@@ -104,7 +105,7 @@ authRouter.post('/login', (req, res) => {
     return
   }
 
-  const token = signToken({ uid: user.id, role: user.role })
+  const { token, jti } = signToken({ uid: user.id, role: user.role })
   res.cookie(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS)
   logSecurity({
     event: 'auth.login.success',
@@ -112,6 +113,7 @@ authRouter.post('/login', (req, res) => {
     outcome: 'success',
     request_id: req.id,
     ip: req.ip,
+    detail: { jti },
   })
   res.status(200).json({ id: user.id, email })
 })
