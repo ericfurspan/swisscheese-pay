@@ -201,3 +201,112 @@ check):
 Re-verified live against the fixed state: the same exploit run's escalation `PATCH` no
 longer changes alice's role, the post-refresh admin call still `403`s, and both rules
 return an empty set against a fresh capture.
+
+## Money-movement race condition (TOCTOU) and idempotency-key replay
+
+**OWASP / CWE:** A04 Insecure Design / A01 Broken Access Control · CWE-362 (Concurrent
+Execution using Shared Resource with Improper Synchronization).
+**Phase introduced:** Phase 3.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-3-money-movement`,
+the vulnerability is introduced at tag `vuln/phase-3-concurrency` (commit `36af5fa`) and
+fixed at tag `fix/phase-3-concurrency` (commit `1c5e8fb`). `main` receives only the
+fixed state via `git merge --no-ff`; both tags and the branch are kept locally.
+
+### Exploit
+[`security/exploits/phase-3-concurrency.mjs`](security/exploits/phase-3-concurrency.mjs)
+is a Node script (not bash) firing concurrent `fetch` calls via `Promise.all`, logged in
+as the seeded customer alice. Real HTTP concurrency requires genuinely overlapping
+requests; bash-backgrounded `curl` processes are too unreliable against the vuln's
+~50ms interleaving window. Two independent races, both exploiting the same underlying
+gap:
+
+- **Replay:** two concurrent `POST /api/transfers` requests carrying the identical
+  `Idempotency-Key` header both complete, producing two distinct transfer IDs (and
+  debiting the source account twice) instead of the one execution a client retrying a
+  failed request should get.
+- **Balance-guard bypass:** three concurrent transfers, each individually affordable
+  against the account's starting balance, all succeed — collectively overdrawing the
+  account into a negative balance, something the balance guard exists specifically to
+  prevent.
+
+### Root cause
+One shared cause (`server/src/services/transfers.ts`, commit `36af5fa`), exploited two
+ways. `better-sqlite3` is synchronous and Node is single-threaded, so the pre-Phase-3
+`transfer()` — a single guarded `UPDATE ... WHERE balance_cents >= ?` inside one
+`db.transaction()` — had no interleaving window. Phase 3 makes `transfer()` `async` to
+model a realistic feature (a fraud/velocity check against a hypothetical external
+service, `mockFraudCheck()`), and the vulnerable version puts the checks *before* that
+`await` instead of inside the synchronous transaction that follows it:
+
+```ts
+// vulnerable state
+const balanceRow = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId)
+if (!balanceRow || balanceRow.balance_cents < amountCents) return { ok: false, reason: 'insufficient_funds' }
+
+if (idempotencyKey !== undefined) {
+  const existing = db.prepare('SELECT id FROM transfers WHERE idempotency_key = ?').get(idempotencyKey)
+  if (existing) return { ok: true, transferId: existing.id, balanceAfterCents /* ... */ }
+}
+
+await mockFraudCheck() // the real await gap
+
+// unconditional -- no WHERE balance_cents >= ? guard, because the check
+// above already (incorrectly) decided this
+debitStmt.run(amountCents, fromId)
+```
+
+Both checks are plain reads, not guard clauses on a write. Two concurrent requests can
+both pass the balance/idempotency-key check (neither has committed anything yet) before
+either reaches `mockFraudCheck()`'s `await`, and Node's event loop happily services one
+request's early steps while another is suspended there. By the time either resumes, the
+decision has already been made on stale data — and the debit that follows is
+unconditional, with no `WHERE balance_cents >= ?` guard, because the pre-await read
+already (incorrectly) decided sufficiency.
+
+### Fix
+Commit `1c5e8fb` moves both checks so they're decided **only** by statements inside a
+single synchronous `db.transaction()` call, evaluated after the `await` rather than
+before it:
+
+```ts
+// fixed state
+await mockFraudCheck() // still runs -- a realistic feature, just no longer load-bearing
+
+const run = db.transaction(() => {
+  if (idempotencyKey !== undefined) {
+    const existing = db.prepare('SELECT id FROM transfers WHERE idempotency_key = ?').get(idempotencyKey)
+    if (existing) return { transferId: existing.id, balanceAfterCents /* ... */ }
+  }
+
+  const debited = debitStmt.run(amountCents, fromId, amountCents) // WHERE balance_cents >= ? restored
+  if (debited.changes === 0) throw new InsufficientFundsError()
+  // ...
+})
+```
+
+`better-sqlite3`'s `db.transaction()` callback is fully synchronous — no `await` can
+appear inside it, so nothing can interleave between the idempotency check and the debit,
+or between the debit's own guard and its write. That synchronous boundary is what
+actually makes this correct, not the schema change: `idempotency_key` also gets a
+`UNIQUE` constraint as a defense-in-depth backstop, but it's not the fix mechanism.
+
+### Detection
+Two rules, both purely log-based (no correlation needed), validated against
+[`security/detections/sample-vulnerable-phase3-concurrency.jsonl`](security/detections/sample-vulnerable-phase3-concurrency.jsonl),
+a log sample captured by running the exploit script against the vulnerable branch state:
+
+- [`security/detections/transfer-balance-race.sh`](security/detections/transfer-balance-race.sh)
+  (Rule 1) flags any `transfer.completed` event with `balance_after_cents < 0` — the
+  guarded `UPDATE`'s entire job is preventing exactly this, so a negative balance in the
+  log is direct evidence the guard was bypassed. No false-positive surface: a
+  correctly-guarded debit can never produce this.
+- [`security/detections/transfer-replay.sh`](security/detections/transfer-replay.sh)
+  (Rule 2) flags any `idempotency_key` whose `transfer.completed` events resolve to more
+  than one *distinct* `transfer_id`. Deliberately not keyed on event count: even in the
+  fixed state, a retried request with the same key logs its own `transfer.completed`
+  line (returning the original transfer's ID) — that's correct dedupe behavior, not
+  evidence of replay. Distinct-ID count is the actual discriminator.
+
+Re-verified live against the fixed state: the exploit script now shows exactly one
+success out of three concurrent overdrawing transfers and exactly one distinct transfer
+ID for the replayed key; both rules return an empty set against a fresh capture.
