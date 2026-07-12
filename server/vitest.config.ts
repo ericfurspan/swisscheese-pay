@@ -5,6 +5,6 @@ export default defineConfig({
     name: 'server',
     environment: 'node',
     include: ['src/**/*.test.ts'],
-    env: { JWT_SECRET: 'test-only-secret' },
+    env: { JWT_SECRET: 'test-only-secret-not-for-real-use' },
   },
 })

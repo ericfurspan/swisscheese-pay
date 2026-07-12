@@ -6,9 +6,18 @@ import jwt from 'jsonwebtoken'
 // of sync with however the app actually gets deployed. JWT_SECRET is always required;
 // local dev/test convenience is provided by tooling (see server/package.json "dev"
 // script, and vitest.config.ts for tests), never by a literal in this file.
+// fix/phase-4-jwt: also rejects a too-short secret. This doesn't make HMAC-SHA256
+// secure by itself (a 32-char low-entropy string is still weak), but it closes off
+// the specific "someone typed a short memorable string" mistake vuln/phase-4-jwt
+// demonstrated -- see docs/superpowers/specs/2026-07-12-phase-4-jwt-design.md §3.
+const MIN_SECRET_LENGTH = 32
+
 function requireSecret(): string {
   const secret = process.env.JWT_SECRET
   if (!secret) throw new Error('JWT_SECRET must be set')
+  if (secret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`JWT_SECRET must be at least ${MIN_SECRET_LENGTH} characters (got ${secret.length})`)
+  }
   return secret
 }
 

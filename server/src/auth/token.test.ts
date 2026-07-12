@@ -53,4 +53,11 @@ describe('token secret guard', () => {
 
     await expect(import('./token.js')).rejects.toThrow(/JWT_SECRET/)
   })
+
+  it('refuses to load with a JWT_SECRET shorter than 32 characters', async () => {
+    vi.resetModules()
+    vi.stubEnv('JWT_SECRET', 'short-secret')
+
+    await expect(import('./token.js')).rejects.toThrow(/32 characters/)
+  })
 })
