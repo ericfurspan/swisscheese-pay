@@ -475,19 +475,25 @@ new token's `jti` in their existing `auth.register`/`auth.login.success` events 
 authenticated request — logs a new `auth.token_used` event with the token's `jti` on
 every successful check (the "used" ledger).
 
+Both ledgers also record the token's `uid` (via the existing `actor_user_id` field) and
+`role` (added to `detail`), not just its `jti`.
 [`security/detections/jwt-forged-token.sh`](security/detections/jwt-forged-token.sh)
-flags any `jti` appearing in the "used" ledger that never appears in the "issued"
-ledger — true regardless of what the forged token claims, since a legitimate `jti` is a
-fresh random UUID chosen only at real signing time, so one rule catches both the
-impersonation and escalation forgeries. Validated against
-[`security/detections/sample-vulnerable-phase4-jwt.jsonl`](security/detections/sample-vulnerable-phase4-jwt.jsonl),
-a log sample captured by running the exploit script against the vulnerable branch state:
-the rule isolates exactly the two forged-token lines and none of alice's legitimate
-activity. Re-verified live against the fixed state: the exploit's crack step fails
-outright (wordlist exhausted, no forgery possible), and the rule is empty against a
-fresh capture.
-
-**Residual limitation, documented rather than solved:** a forger who can observe a real
-`jti` in transit (not just crack an offline-captured token) could reuse it and evade
-this detection — a materially stronger threat model (network position, not just secret
-cracking) than what this phase targets.
+binds all three: it flags any `auth.token_used` event whose `(jti, uid, role)` claim set
+doesn't match an issuance record for that `jti`. Existence-only `jti` correlation isn't
+enough by itself — the exploit's own attacker already holds a legitimately-issued `jti`
+of their own (no network position or token sniffing required, since it's their own
+captured session), so a forgery that reuses that real `jti` while changing `uid` or
+`role` would pass an existence check while still being exactly the impersonation/
+escalation forgery this phase targets. Binding the full claim set catches it: the
+forged token's `jti` is real, but not real *for that uid/role*, and the rule reports
+those independently, so one rule still catches both the impersonation (`uid` mismatch)
+and escalation (`role` mismatch) forgeries. Validated against
+[`security/detections/sample-vulnerable-phase4-jwt.jsonl`](security/detections/sample-vulnerable-phase4-jwt.jsonl):
+the rule isolates the two unseen-`jti` lines, the reused-`jti` role-escalation line, and
+the reused-`jti` impersonation line — four flags total — and none of alice's legitimate
+activity, nor a reused-`jti` case where the issuance record predates `role` being logged
+(treated as unverifiable on `role` alone, not a forced mismatch, so it doesn't
+false-positive on tokens issued just before this schema change deployed — though a
+`uid` mismatch on that same legacy record is still caught). Re-verified live against the
+fixed state: the exploit's crack step fails outright (wordlist exhausted, no forgery
+possible), and the rule is empty against a fresh capture.

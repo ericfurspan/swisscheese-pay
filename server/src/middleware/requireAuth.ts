@@ -27,7 +27,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     outcome: 'success',
     request_id: req.id,
     ip: req.ip,
-    detail: { jti: payload.jti },
+    detail: { jti: payload.jti, role: payload.role },
   })
   next()
 }

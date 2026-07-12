@@ -73,7 +73,7 @@ authRouter.post('/register', (req, res) => {
     outcome: 'success',
     request_id: req.id,
     ip: req.ip,
-    detail: { jti },
+    detail: { jti, role: 'customer' },
   })
   res.status(201).json({ id: uid, email, full_name: fullName })
 })
@@ -113,7 +113,7 @@ authRouter.post('/login', (req, res) => {
     outcome: 'success',
     request_id: req.id,
     ip: req.ip,
-    detail: { jti },
+    detail: { jti, role: user.role },
   })
   res.status(200).json({ id: user.id, email })
 })
