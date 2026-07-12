@@ -310,3 +310,96 @@ a log sample captured by running the exploit script against the vulnerable branc
 Re-verified live against the fixed state: the exploit script now shows exactly one
 success out of three concurrent overdrawing transfers and exactly one distinct transfer
 ID for the replayed key; both rules return an empty set against a fresh capture.
+
+## Negative-amount transfers and tampered payment-link recipients
+
+**OWASP / CWE:** A04 Insecure Design · CWE-20 (Improper Input Validation) for the
+negative-amount bug; CWE-841 (Improper Enforcement of Behavioral Workflow) for the
+tampered-recipient bug.
+**Phase introduced:** Phase 3.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-3-money-movement`,
+negative-amount is introduced at tag `vuln/phase-3-negative-amount` (commit `5535d83`)
+and fixed at tag `fix/phase-3-negative-amount` (commit `16b4d4d`); tampered-recipient is
+introduced at tag `vuln/phase-3-tampered-recipient` (commit `2519c56`) and fixed at tag
+`fix/phase-3-tampered-recipient` (commit `61261ba`). These are two independent bugs on
+the money-movement surface, not chained into each other (unlike Phase 2's
+mass-assignment/data-exposure pair) — each has its own vuln→fix cycle, sequential on the
+branch. `main` receives only the fixed state via `git merge --no-ff`; all tags and the
+branch are kept locally.
+
+### Exploit
+Two independent scripts, both attacker's-eye view from the seeded customer accounts:
+
+- [`security/exploits/phase-3-negative-amount.sh`](security/exploits/phase-3-negative-amount.sh):
+  alice sends `POST /api/transfers` with a negative `amount_cents` targeting bob's
+  account. Against the vulnerable state it succeeds (`201`) — alice's balance goes
+  *up*, bob's balance goes *down*, despite bob never authorizing anything.
+- [`security/exploits/phase-3-tampered-recipient.sh`](security/exploits/phase-3-tampered-recipient.sh):
+  bob creates a payment link naming his own checking account as recipient; alice pays
+  it but adds a `to_account_id` field in the request body pointing at her *other*
+  account. Against the vulnerable state the payment still succeeds (`201`), but bob is
+  never credited — the money lands in alice's other account instead.
+
+### Root cause (two independent bugs)
+
+**Negative-amount (`server/src/services/transfers.ts`, commit `5535d83`).** The amount
+guard was loosened from rejecting `amountCents <= 0` to only rejecting non-integers:
+
+```ts
+// vulnerable state
+if (!Number.isInteger(amountCents)) {
+  return { ok: false, reason: 'invalid_amount' }
+}
+```
+
+This is exploitable, not just "a weird input got accepted," because the debit and
+credit statements share the same signed parameter — `balance_cents = balance_cents - ?`
+on the source, `balance_cents = balance_cents + ?` on the destination. A negative
+`amountCents` flips both: the "debit" on the caller's own (ownership-checked) account
+becomes an increase, and the "credit" on the destination — which has no floor check,
+since a credit is normally only ever an increase — becomes an unguarded decrease. No
+ownership check is needed on the victim's account, since the victim is merely the
+transfer's destination.
+
+**Tampered-recipient (`server/src/routes/paymentLinks.ts`, commit `2519c56`).** Payment
+links previously only supported create/list; this phase adds a `POST
+/api/payment-links/:token/pay` flow whose vulnerable version reads an optional
+`to_account_id` from the request body and uses it in place of the link's own,
+DB-sourced `account_id` when present:
+
+```ts
+// vulnerable state
+const toId = typeof toIdOverride === 'number' ? toIdOverride : link.account_id
+```
+
+The link's `account_id` is meant to be immutable and server-derived from the token — a
+payer authenticating to pay a specific link has no legitimate reason to name a
+different destination.
+
+### Fix
+Two independent reverts, matching the two independent bugs:
+
+- Commit `16b4d4d` restores the `amountCents <= 0` rejection — identical to the
+  pre-Phase-3 guard.
+- Commit `61261ba` removes the `to_account_id` destructure entirely; `toId` is always
+  `link.account_id`, read from the DB row keyed by the token, with nothing in the
+  request body able to override it.
+
+### Detection
+Two rules, both purely log-based, validated against the shared
+[`security/detections/sample-vulnerable-phase3-input-validation.jsonl`](security/detections/sample-vulnerable-phase3-input-validation.jsonl)
+(one capture per bug, appended to the same file since both were captured while live on
+the branch at different points but neither interacts with the other):
+
+- [`security/detections/negative-amount-transfer.sh`](security/detections/negative-amount-transfer.sh)
+  (Rule 1) flags any `transfer.completed` event with `amount_cents <= 0`. The DB column
+  has no `CHECK` constraint enforcing positivity (comment only), so a negative value
+  that actually reached `completed` is unambiguous evidence.
+- [`security/detections/payment-link-recipient-mismatch.sh`](security/detections/payment-link-recipient-mismatch.sh)
+  (Rule 2) flags any `payment_link.paid` event where `actual_to_account_id` differs from
+  `link_account_id` — the link's own DB-sourced value (independent ground truth, same
+  pattern as Phase 1's `owner_user_id` check) versus what was actually credited.
+
+Re-verified live against each fix: the negative-amount exploit is now rejected (`400`,
+no balances change) and Rule 1 is empty against a fresh capture; the tampered-recipient
+exploit now correctly credits bob and Rule 2 is empty against a fresh capture.
