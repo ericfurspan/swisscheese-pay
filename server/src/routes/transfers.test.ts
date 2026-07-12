@@ -141,7 +141,11 @@ describe('transfers routes', () => {
       .send({ from_account_id: accountId('CHK-1001'), to_account_id: accountId('CHK-2001'), amount_cents: 1_000 })
 
     const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'transfer.completed')
-    expect(line).toMatchObject({ balance_after_cents: 100_000 - 1_000, idempotency_key: 'test-key-1' })
+    expect(line).toMatchObject({
+      balance_after_cents: 100_000 - 1_000,
+      idempotency_key: 'test-key-1',
+      amount_cents: 1_000,
+    })
     logSpy.mockRestore()
   })
 })

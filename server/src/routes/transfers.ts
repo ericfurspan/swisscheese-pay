@@ -74,6 +74,7 @@ transfersRouter.post(
         transfer_id: result.transferId,
         balance_after_cents: result.balanceAfterCents,
         idempotency_key: idempotencyKey ?? null,
+        amount_cents: amountCents,
       },
     })
     res.status(201).json({ id: result.transferId })
