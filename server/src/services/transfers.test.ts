@@ -54,16 +54,21 @@ describe('transfer', () => {
     expect(balanceOf(db, 2)).toBe(5_000)
   })
 
-  it('rejects a zero or negative amount', async () => {
+  it('still rejects a non-integer amount', async () => {
     const db = setup()
-    expect(await transfer(db, { fromId: 1, toId: 2, amountCents: 0, uid: 1 })).toEqual({
+    expect(await transfer(db, { fromId: 1, toId: 2, amountCents: 10.5, uid: 1 })).toEqual({
       ok: false,
       reason: 'invalid_amount',
     })
-    expect(await transfer(db, { fromId: 1, toId: 2, amountCents: -500, uid: 1 })).toEqual({
-      ok: false,
-      reason: 'invalid_amount',
-    })
+  })
+
+  it('-- vulnerable state, tightened at fix/phase-3-negative-amount -- a negative amount credits the sender and debits the destination', async () => {
+    const db = setup()
+    const result = await transfer(db, { fromId: 1, toId: 2, amountCents: -1_000, uid: 1 })
+
+    expect(result).toMatchObject({ ok: true })
+    expect(balanceOf(db, 1)).toBe(10_000 + 1_000)
+    expect(balanceOf(db, 2)).toBe(5_000 - 1_000)
   })
 
   it('rejects an overdraft, leaving balances unchanged (single request)', async () => {

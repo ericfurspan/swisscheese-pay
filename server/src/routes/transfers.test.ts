@@ -75,17 +75,18 @@ describe('transfers routes', () => {
     expect(balanceOf('CHK-2001')).toBe(25_000)
   })
 
-  it('rejects a zero or negative amount', async () => {
+  it('-- vulnerable state, tightened at fix/phase-3-negative-amount -- accepts a negative amount and reverses the money flow', async () => {
     const agent = await loginAsAlice()
 
     const res = await agent.post('/api/transfers').send({
       from_account_id: accountId('CHK-1001'),
       to_account_id: accountId('CHK-2001'),
-      amount_cents: -100,
+      amount_cents: -1_000,
     })
 
-    expect(res.status).toBe(400)
-    expect(balanceOf('CHK-1001')).toBe(100_000)
+    expect(res.status).toBe(201)
+    expect(balanceOf('CHK-1001')).toBe(100_000 + 1_000)
+    expect(balanceOf('CHK-2001')).toBe(25_000 - 1_000)
   })
 
   it('rejects a transfer to a nonexistent account, leaving the balance unchanged', async () => {

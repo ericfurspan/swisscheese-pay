@@ -38,7 +38,7 @@ export async function transfer(db: Database.Database, input: TransferInput): Pro
     return { ok: false, reason: 'not_owner' }
   }
 
-  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+  if (!Number.isInteger(amountCents)) {
     return { ok: false, reason: 'invalid_amount' }
   }
 
