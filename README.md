@@ -15,14 +15,14 @@ task-board or CRM clone can't.
 
 ## Status
 
-| Phase | Vulnerability class | Status |
-|---|---|---|
-| 0 | Secure scaffold | Done |
-| 1 | Broken object-level access control (BOLA/IDOR) | Done |
-| 2 | Mass assignment / excessive data exposure | Done |
-| 3 | Money-movement business logic (races, replay, negative-amount, tampered recipient) | Done |
-| 4 | JWT attacks (weak secret, forged tokens) | Done |
-| 5 | Standard web-vuln breadth (stored XSS, CSRF, open redirect, clickjacking, CORS) | Planned, post-v1 |
+| Phase | Vulnerability class                                                                | Status           |
+| ----- | ---------------------------------------------------------------------------------- | ---------------- |
+| 0     | Secure scaffold                                                                    | Done             |
+| 1     | Broken object-level access control (BOLA/IDOR)                                     | Done             |
+| 2     | Mass assignment / excessive data exposure                                          | Done             |
+| 3     | Money-movement business logic (races, replay, negative-amount, tampered recipient) | Done             |
+| 4     | JWT attacks (weak secret, forged tokens)                                           | Done             |
+| 5     | Standard web-vuln breadth (stored XSS, CSRF, open redirect, clickjacking, CORS)    | Planned, post-v1 |
 
 Every phase is taken through the four-part loop below and documented in
 [`VULNS.md`](./VULNS.md).
@@ -119,14 +119,14 @@ git checkout main
 The other five vulnerabilities follow the same checkout / `make up` / run / `make down`
 pattern:
 
-| Vulnerability | Vulnerable tag | Fixed tag | Exploit script |
-|---|---|---|---|
-| BOLA / IDOR | `vuln/phase-1-bola` | `fix/phase-1-bola` | `security/exploits/phase-1-bola.sh` |
-| Mass assignment | `vuln/phase-2-mass-assignment` | `fix/phase-2-mass-assignment` | `security/exploits/phase-2-mass-assignment.sh` |
-| Money-movement race + idempotency replay | `vuln/phase-3-concurrency` | `fix/phase-3-concurrency` | `security/exploits/phase-3-concurrency.mjs` |
-| Negative-amount transfer | `vuln/phase-3-negative-amount` | `fix/phase-3-negative-amount` | `security/exploits/phase-3-negative-amount.sh` |
-| Tampered payment-link recipient | `vuln/phase-3-tampered-recipient` | `fix/phase-3-tampered-recipient` | `security/exploits/phase-3-tampered-recipient.sh` |
-| JWT weak-secret cracking | `vuln/phase-4-jwt` | `fix/phase-4-jwt` | `security/exploits/phase-4-jwt.mjs` |
+| Vulnerability                            | Vulnerable tag                    | Fixed tag                        | Exploit script                                    |
+| ---------------------------------------- | --------------------------------- | -------------------------------- | ------------------------------------------------- |
+| BOLA / IDOR                              | `vuln/phase-1-bola`               | `fix/phase-1-bola`               | `security/exploits/phase-1-bola.sh`               |
+| Mass assignment                          | `vuln/phase-2-mass-assignment`    | `fix/phase-2-mass-assignment`    | `security/exploits/phase-2-mass-assignment.sh`    |
+| Money-movement race + idempotency replay | `vuln/phase-3-concurrency`        | `fix/phase-3-concurrency`        | `security/exploits/phase-3-concurrency.mjs`       |
+| Negative-amount transfer                 | `vuln/phase-3-negative-amount`    | `fix/phase-3-negative-amount`    | `security/exploits/phase-3-negative-amount.sh`    |
+| Tampered payment-link recipient          | `vuln/phase-3-tampered-recipient` | `fix/phase-3-tampered-recipient` | `security/exploits/phase-3-tampered-recipient.sh` |
+| JWT weak-secret cracking                 | `vuln/phase-4-jwt`                | `fix/phase-4-jwt`                | `security/exploits/phase-4-jwt.mjs`               |
 
 Each script's expected output and the matching detection rule are documented per-vuln
 in [`VULNS.md`](./VULNS.md).
