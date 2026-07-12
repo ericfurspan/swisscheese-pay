@@ -1,18 +1,34 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client.js'
 import type { Account } from '../api/types.js'
 import { Nav } from '../components/Nav.js'
+import { formatCents } from '../lib/format.js'
 
-export function TransferPage() {
+interface PaymentLinkDetail {
+  token: string
+  amount_cents: number
+  note: string | null
+}
+
+export function PayPage() {
+  const { token } = useParams<{ token: string }>()
+  const [link, setLink] = useState<PaymentLinkDetail | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [fromAccountId, setFromAccountId] = useState('')
-  const [toAccountId, setToAccountId] = useState('')
-  const [amount, setAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
+    if (!token) return
+    api
+      .get<PaymentLinkDetail>(`/payment-links/${token}`)
+      .catch(() => {
+        setError('Payment link not found')
+        return null
+      })
+      .then((result) => setLink(result))
     api
       .get<Account[]>('/accounts')
       .then((result) => {
@@ -20,7 +36,7 @@ export function TransferPage() {
         if (result[0]) setFromAccountId(String(result[0].id))
       })
       .catch(() => setError('Could not load accounts'))
-  }, [])
+  }, [token])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -28,31 +44,31 @@ export function TransferPage() {
     setSuccess(null)
     setSubmitting(true)
     try {
-      await api.post(
-        '/transfers',
-        {
-          from_account_id: Number(fromAccountId),
-          to_account_id: Number(toAccountId),
-          amount_cents: Math.round(Number(amount) * 100),
-        },
-        { 'Idempotency-Key': crypto.randomUUID() },
-      )
-      setSuccess('Transfer complete')
-      setToAccountId('')
-      setAmount('')
+      await api.post(`/payment-links/${token}/pay`, { from_account_id: Number(fromAccountId) })
+      setSuccess('Payment complete')
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Transfer failed')
+      setError(err instanceof ApiError ? err.message : 'Payment failed')
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (!link) {
+    return (
+      <div>
+        <Nav />
+        {error && <p role="alert">{error}</p>}
+      </div>
+    )
+  }
+
   return (
     <div>
       <Nav />
-      <h1>Transfer</h1>
+      <h1>Pay {formatCents(link.amount_cents)}</h1>
+      {link.note && <p>{link.note}</p>}
       <form onSubmit={handleSubmit}>
-        <label htmlFor="from_account">From</label>
+        <label htmlFor="from_account">Pay from</label>
         <select
           id="from_account"
           value={fromAccountId}
@@ -64,29 +80,10 @@ export function TransferPage() {
             </option>
           ))}
         </select>
-        <label htmlFor="to_account">To account ID</label>
-        <input
-          id="to_account"
-          type="number"
-          min="1"
-          value={toAccountId}
-          onChange={(event) => setToAccountId(event.target.value)}
-          required
-        />
-        <label htmlFor="amount">Amount (USD)</label>
-        <input
-          id="amount"
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
-          required
-        />
         {error && <p role="alert">{error}</p>}
         {success && <p role="status">{success}</p>}
         <button type="submit" disabled={submitting}>
-          Send
+          Pay
         </button>
       </form>
     </div>

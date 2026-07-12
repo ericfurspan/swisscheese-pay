@@ -10,6 +10,7 @@ export type SecurityEvent =
   | 'transfer.failed'
   | 'admin.action'
   | 'profile.update'
+  | 'payment_link.paid'
 
 export interface SecurityLogEntry {
   event: SecurityEvent

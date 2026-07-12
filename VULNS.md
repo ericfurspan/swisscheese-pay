@@ -201,3 +201,205 @@ check):
 Re-verified live against the fixed state: the same exploit run's escalation `PATCH` no
 longer changes alice's role, the post-refresh admin call still `403`s, and both rules
 return an empty set against a fresh capture.
+
+## Money-movement race condition (TOCTOU) and idempotency-key replay
+
+**OWASP / CWE:** A04 Insecure Design / A01 Broken Access Control · CWE-362 (Concurrent
+Execution using Shared Resource with Improper Synchronization).
+**Phase introduced:** Phase 3.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-3-money-movement`,
+the vulnerability is introduced at tag `vuln/phase-3-concurrency` (commit `36af5fa`) and
+fixed at tag `fix/phase-3-concurrency` (commit `1c5e8fb`). `main` receives only the
+fixed state via `git merge --no-ff`; both tags and the branch are kept locally.
+
+### Exploit
+[`security/exploits/phase-3-concurrency.mjs`](security/exploits/phase-3-concurrency.mjs)
+is a Node script (not bash) firing concurrent `fetch` calls via `Promise.all`, logged in
+as the seeded customer alice. Real HTTP concurrency requires genuinely overlapping
+requests; bash-backgrounded `curl` processes are too unreliable against the vuln's
+~50ms interleaving window. Two independent races, both exploiting the same underlying
+gap:
+
+- **Replay:** two concurrent `POST /api/transfers` requests carrying the identical
+  `Idempotency-Key` header both complete, producing two distinct transfer IDs (and
+  debiting the source account twice) instead of the one execution a client retrying a
+  failed request should get.
+- **Balance-guard bypass:** three concurrent transfers, each individually affordable
+  against the account's starting balance, all succeed — collectively overdrawing the
+  account into a negative balance, something the balance guard exists specifically to
+  prevent.
+
+### Root cause
+One shared cause (`server/src/services/transfers.ts`, commit `36af5fa`), exploited two
+ways. `better-sqlite3` is synchronous and Node is single-threaded, so the pre-Phase-3
+`transfer()` — a single guarded `UPDATE ... WHERE balance_cents >= ?` inside one
+`db.transaction()` — had no interleaving window. Phase 3 makes `transfer()` `async` to
+model a realistic feature (a fraud/velocity check against a hypothetical external
+service, `mockFraudCheck()`), and the vulnerable version puts the checks *before* that
+`await` instead of inside the synchronous transaction that follows it:
+
+```ts
+// vulnerable state
+const balanceRow = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId)
+if (!balanceRow || balanceRow.balance_cents < amountCents) return { ok: false, reason: 'insufficient_funds' }
+
+if (idempotencyKey !== undefined) {
+  const existing = db.prepare('SELECT id FROM transfers WHERE idempotency_key = ?').get(idempotencyKey)
+  if (existing) return { ok: true, transferId: existing.id, balanceAfterCents /* ... */ }
+}
+
+await mockFraudCheck() // the real await gap
+
+// unconditional -- no WHERE balance_cents >= ? guard, because the check
+// above already (incorrectly) decided this
+debitStmt.run(amountCents, fromId)
+```
+
+Both checks are plain reads, not guard clauses on a write. Two concurrent requests can
+both pass the balance/idempotency-key check (neither has committed anything yet) before
+either reaches `mockFraudCheck()`'s `await`, and Node's event loop happily services one
+request's early steps while another is suspended there. By the time either resumes, the
+decision has already been made on stale data — and the debit that follows is
+unconditional, with no `WHERE balance_cents >= ?` guard, because the pre-await read
+already (incorrectly) decided sufficiency.
+
+### Fix
+Commit `1c5e8fb` moves both checks so they're decided **only** by statements inside a
+single synchronous `db.transaction()` call, evaluated after the `await` rather than
+before it:
+
+```ts
+// fixed state
+await mockFraudCheck() // still runs -- a realistic feature, just no longer load-bearing
+
+const run = db.transaction(() => {
+  if (idempotencyKey !== undefined) {
+    const existing = db.prepare('SELECT id FROM transfers WHERE idempotency_key = ?').get(idempotencyKey)
+    if (existing) return { transferId: existing.id, balanceAfterCents /* ... */ }
+  }
+
+  const debited = debitStmt.run(amountCents, fromId, amountCents) // WHERE balance_cents >= ? restored
+  if (debited.changes === 0) throw new InsufficientFundsError()
+  // ...
+})
+```
+
+`better-sqlite3`'s `db.transaction()` callback is fully synchronous — no `await` can
+appear inside it, so nothing can interleave between the idempotency check and the debit,
+or between the debit's own guard and its write. That synchronous boundary is what
+actually makes this correct, not the schema change: `idempotency_key` also gets a
+`UNIQUE` constraint as a defense-in-depth backstop, but it's not the fix mechanism.
+
+### Detection
+Two rules, both purely log-based (no correlation needed), validated against
+[`security/detections/sample-vulnerable-phase3-concurrency.jsonl`](security/detections/sample-vulnerable-phase3-concurrency.jsonl),
+a log sample captured by running the exploit script against the vulnerable branch state:
+
+- [`security/detections/transfer-balance-race.sh`](security/detections/transfer-balance-race.sh)
+  (Rule 1) flags any `transfer.completed` event with `balance_after_cents < 0` — the
+  guarded `UPDATE`'s entire job is preventing exactly this, so a negative balance in the
+  log is direct evidence the guard was bypassed. No false-positive surface: a
+  correctly-guarded debit can never produce this.
+- [`security/detections/transfer-replay.sh`](security/detections/transfer-replay.sh)
+  (Rule 2) flags any `idempotency_key` whose `transfer.completed` events resolve to more
+  than one *distinct* `transfer_id`. Deliberately not keyed on event count: even in the
+  fixed state, a retried request with the same key logs its own `transfer.completed`
+  line (returning the original transfer's ID) — that's correct dedupe behavior, not
+  evidence of replay. Distinct-ID count is the actual discriminator.
+
+Re-verified live against the fixed state: the exploit script now shows exactly one
+success out of three concurrent overdrawing transfers and exactly one distinct transfer
+ID for the replayed key; both rules return an empty set against a fresh capture.
+
+## Negative-amount transfers and tampered payment-link recipients
+
+**OWASP / CWE:** A04 Insecure Design · CWE-20 (Improper Input Validation) for the
+negative-amount bug; CWE-841 (Improper Enforcement of Behavioral Workflow) for the
+tampered-recipient bug.
+**Phase introduced:** Phase 3.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-3-money-movement`,
+negative-amount is introduced at tag `vuln/phase-3-negative-amount` (commit `5535d83`)
+and fixed at tag `fix/phase-3-negative-amount` (commit `16b4d4d`); tampered-recipient is
+introduced at tag `vuln/phase-3-tampered-recipient` (commit `2519c56`) and fixed at tag
+`fix/phase-3-tampered-recipient` (commit `61261ba`). These are two independent bugs on
+the money-movement surface, not chained into each other (unlike Phase 2's
+mass-assignment/data-exposure pair) — each has its own vuln→fix cycle, sequential on the
+branch. `main` receives only the fixed state via `git merge --no-ff`; all tags and the
+branch are kept locally.
+
+### Exploit
+Two independent scripts, both attacker's-eye view from the seeded customer accounts:
+
+- [`security/exploits/phase-3-negative-amount.sh`](security/exploits/phase-3-negative-amount.sh):
+  alice sends `POST /api/transfers` with a negative `amount_cents` targeting bob's
+  account. Against the vulnerable state it succeeds (`201`) — alice's balance goes
+  *up*, bob's balance goes *down*, despite bob never authorizing anything.
+- [`security/exploits/phase-3-tampered-recipient.sh`](security/exploits/phase-3-tampered-recipient.sh):
+  bob creates a payment link naming his own checking account as recipient; alice pays
+  it but adds a `to_account_id` field in the request body pointing at her *other*
+  account. Against the vulnerable state the payment still succeeds (`201`), but bob is
+  never credited — the money lands in alice's other account instead.
+
+### Root cause (two independent bugs)
+
+**Negative-amount (`server/src/services/transfers.ts`, commit `5535d83`).** The amount
+guard was loosened from rejecting `amountCents <= 0` to only rejecting non-integers:
+
+```ts
+// vulnerable state
+if (!Number.isInteger(amountCents)) {
+  return { ok: false, reason: 'invalid_amount' }
+}
+```
+
+This is exploitable, not just "a weird input got accepted," because the debit and
+credit statements share the same signed parameter — `balance_cents = balance_cents - ?`
+on the source, `balance_cents = balance_cents + ?` on the destination. A negative
+`amountCents` flips both: the "debit" on the caller's own (ownership-checked) account
+becomes an increase, and the "credit" on the destination — which has no floor check,
+since a credit is normally only ever an increase — becomes an unguarded decrease. No
+ownership check is needed on the victim's account, since the victim is merely the
+transfer's destination.
+
+**Tampered-recipient (`server/src/routes/paymentLinks.ts`, commit `2519c56`).** Payment
+links previously only supported create/list; this phase adds a `POST
+/api/payment-links/:token/pay` flow whose vulnerable version reads an optional
+`to_account_id` from the request body and uses it in place of the link's own,
+DB-sourced `account_id` when present:
+
+```ts
+// vulnerable state
+const toId = typeof toIdOverride === 'number' ? toIdOverride : link.account_id
+```
+
+The link's `account_id` is meant to be immutable and server-derived from the token — a
+payer authenticating to pay a specific link has no legitimate reason to name a
+different destination.
+
+### Fix
+Two independent reverts, matching the two independent bugs:
+
+- Commit `16b4d4d` restores the `amountCents <= 0` rejection — identical to the
+  pre-Phase-3 guard.
+- Commit `61261ba` removes the `to_account_id` destructure entirely; `toId` is always
+  `link.account_id`, read from the DB row keyed by the token, with nothing in the
+  request body able to override it.
+
+### Detection
+Two rules, both purely log-based, validated against the shared
+[`security/detections/sample-vulnerable-phase3-input-validation.jsonl`](security/detections/sample-vulnerable-phase3-input-validation.jsonl)
+(one capture per bug, appended to the same file since both were captured while live on
+the branch at different points but neither interacts with the other):
+
+- [`security/detections/negative-amount-transfer.sh`](security/detections/negative-amount-transfer.sh)
+  (Rule 1) flags any `transfer.completed` event with `amount_cents <= 0`. The DB column
+  has no `CHECK` constraint enforcing positivity (comment only), so a negative value
+  that actually reached `completed` is unambiguous evidence.
+- [`security/detections/payment-link-recipient-mismatch.sh`](security/detections/payment-link-recipient-mismatch.sh)
+  (Rule 2) flags any `payment_link.paid` event where `actual_to_account_id` differs from
+  `link_account_id` — the link's own DB-sourced value (independent ground truth, same
+  pattern as Phase 1's `owner_user_id` check) versus what was actually credited.
+
+Re-verified live against each fix: the negative-amount exploit is now rejected (`400`,
+no balances change) and Rule 1 is empty against a fresh capture; the tampered-recipient
+exploit now correctly credits bob and Rule 2 is empty against a fresh capture.
