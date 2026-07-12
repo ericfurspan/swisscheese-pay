@@ -112,6 +112,7 @@ paymentLinksRouter.post(
       toId,
       amountCents: link.amount_cents,
       uid: req.user!.uid,
+      paymentLinkId: link.id,
     })
 
     logSecurity({
@@ -130,8 +131,16 @@ paymentLinksRouter.post(
 
     if (!result.ok) {
       const status =
-        result.reason === 'not_owner' ? 404 : result.reason === 'insufficient_funds' ? 422 : 400
-      res.status(status).json({ error: result.reason })
+        result.reason === 'not_owner'
+          ? 404
+          : result.reason === 'insufficient_funds'
+            ? 422
+            : result.reason === 'idempotency_conflict'
+              ? 409
+              : 400
+      const error =
+        result.reason === 'idempotency_conflict' ? 'Payment link already used' : result.reason
+      res.status(status).json({ error })
       return
     }
 
