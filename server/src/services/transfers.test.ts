@@ -127,4 +127,83 @@ describe('transfer', () => {
     expect(transferIds.size).toBe(1)
     expect(balanceOf(db, 1)).toBe(10_000 - 100)
   })
+
+  it('rejects idempotency-key reuse with a mismatched payload as a conflict, not a silent replay', async () => {
+    const db = setup()
+    const key = 'reused-key-1'
+
+    const first = await transfer(db, {
+      fromId: 1,
+      toId: 2,
+      amountCents: 100,
+      uid: 1,
+      idempotencyKey: key,
+    })
+    expect(first.ok).toBe(true)
+
+    // Same key, different amount -- must not be treated as the same request.
+    const second = await transfer(db, {
+      fromId: 1,
+      toId: 2,
+      amountCents: 200,
+      uid: 1,
+      idempotencyKey: key,
+    })
+
+    expect(second).toEqual({ ok: false, reason: 'idempotency_conflict' })
+    expect(balanceOf(db, 1)).toBe(10_000 - 100) // only the first transfer's debit applied
+  })
+
+  it('returns the original result for an exact retry with the same idempotency key', async () => {
+    const db = setup()
+    const key = 'exact-retry-key'
+
+    const first = await transfer(db, {
+      fromId: 1,
+      toId: 2,
+      amountCents: 150,
+      uid: 1,
+      idempotencyKey: key,
+    })
+    const second = await transfer(db, {
+      fromId: 1,
+      toId: 2,
+      amountCents: 150,
+      uid: 1,
+      idempotencyKey: key,
+    })
+
+    expect(first.ok).toBe(true)
+    expect(second).toEqual(first)
+  })
+
+  it('never returns another user transfer id when a different user reuses their key', async () => {
+    const db = setup()
+    const key = 'cross-user-key'
+
+    // setup() seeds account 1 (CHK-ALICE) owned by uid 1, account 2 (CHK-BOB) owned by uid 2.
+    const victim = await transfer(db, {
+      fromId: 1,
+      toId: 2,
+      amountCents: 500,
+      uid: 1,
+      idempotencyKey: key,
+    })
+    expect(victim.ok).toBe(true)
+
+    // Bob (uid 2) owns account 2 -- passes the ownership gate for his own fromId,
+    // then reuses Alice's idempotency key with a mismatched payload.
+    const attacker = await transfer(db, {
+      fromId: 2,
+      toId: 1,
+      amountCents: 500,
+      uid: 2,
+      idempotencyKey: key,
+    })
+
+    expect(attacker).toEqual({ ok: false, reason: 'idempotency_conflict' })
+    // The headline property: the attacker's response carries no transfer id at all,
+    // let alone the victim's.
+    expect(attacker).not.toHaveProperty('transferId')
+  })
 })

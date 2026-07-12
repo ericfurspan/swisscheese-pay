@@ -3,7 +3,11 @@ import { isAccountOwnedByUser } from './accounts.js'
 import { mockFraudCheck } from './fraudCheck.js'
 
 export type TransferFailureReason =
-  'not_owner' | 'invalid_amount' | 'invalid_destination' | 'insufficient_funds'
+  | 'not_owner'
+  | 'invalid_amount'
+  | 'invalid_destination'
+  | 'insufficient_funds'
+  | 'idempotency_conflict'
 
 export type TransferResult =
   | { ok: true; transferId: number; balanceAfterCents: number }
@@ -19,6 +23,7 @@ export interface TransferInput {
 
 class InsufficientFundsError extends Error {}
 class InvalidDestinationError extends Error {}
+class IdempotencyConflictError extends Error {}
 
 interface BalanceRow {
   balance_cents: number
@@ -69,11 +74,22 @@ export async function transfer(
   const run = db.transaction(() => {
     if (idempotencyKey !== undefined) {
       const existing = db
-        .prepare('SELECT id FROM transfers WHERE idempotency_key = ?')
-        .get(idempotencyKey) as TransferIdRow | undefined
+        .prepare(
+          'SELECT id, from_account_id, to_account_id, amount_cents FROM transfers WHERE idempotency_key = ?',
+        )
+        .get(idempotencyKey) as
+        | (TransferIdRow & { from_account_id: number; to_account_id: number; amount_cents: number })
+        | undefined
       if (existing) {
-        const balanceAfterCents = (balanceStmt.get(fromId) as BalanceRow).balance_cents
-        return { transferId: existing.id, balanceAfterCents }
+        if (
+          existing.from_account_id === fromId &&
+          existing.to_account_id === toId &&
+          existing.amount_cents === amountCents
+        ) {
+          const balanceAfterCents = (balanceStmt.get(fromId) as BalanceRow).balance_cents
+          return { transferId: existing.id, balanceAfterCents }
+        }
+        throw new IdempotencyConflictError()
       }
     }
 
@@ -101,6 +117,8 @@ export async function transfer(
   } catch (err) {
     if (err instanceof InsufficientFundsError) return { ok: false, reason: 'insufficient_funds' }
     if (err instanceof InvalidDestinationError) return { ok: false, reason: 'invalid_destination' }
+    if (err instanceof IdempotencyConflictError)
+      return { ok: false, reason: 'idempotency_conflict' }
     throw err
   }
 }

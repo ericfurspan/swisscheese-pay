@@ -157,4 +157,27 @@ describe('transfers routes', () => {
     })
     logSpy.mockRestore()
   })
+
+  it('returns 409 when Idempotency-Key is reused with a different payload', async () => {
+    const agent = await loginAsAlice()
+    await agent
+      .post('/api/transfers')
+      .set('Idempotency-Key', 'route-key-1')
+      .send({
+        from_account_id: accountId('CHK-1001'),
+        to_account_id: accountId('CHK-2001'),
+        amount_cents: 100,
+      })
+
+    const res = await agent
+      .post('/api/transfers')
+      .set('Idempotency-Key', 'route-key-1')
+      .send({
+        from_account_id: accountId('CHK-1001'),
+        to_account_id: accountId('CHK-2001'),
+        amount_cents: 200,
+      })
+
+    expect(res.status).toBe(409)
+  })
 })
