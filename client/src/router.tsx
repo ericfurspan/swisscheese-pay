@@ -5,6 +5,7 @@ import { AccountPage } from './pages/Account.js'
 import { DashboardPage } from './pages/Dashboard.js'
 import { LoginPage } from './pages/Login.js'
 import { PaymentLinkPage } from './pages/PaymentLink.js'
+import { PayPage } from './pages/Pay.js'
 import { ProfilePage } from './pages/Profile.js'
 import { RegisterPage } from './pages/Register.js'
 import { TransferPage } from './pages/Transfer.js'
@@ -21,6 +22,7 @@ export function AppRouter() {
             <Route path="/accounts/:id" element={<AccountPage />} />
             <Route path="/transfer" element={<TransferPage />} />
             <Route path="/payment-links" element={<PaymentLinkPage />} />
+            <Route path="/pay/:token" element={<PayPage />} />
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
