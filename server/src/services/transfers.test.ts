@@ -62,13 +62,13 @@ describe('transfer', () => {
     })
   })
 
-  it('-- vulnerable state, tightened at fix/phase-3-negative-amount -- a negative amount credits the sender and debits the destination', async () => {
+  it('rejects a negative amount (negative-amount transfer fixed)', async () => {
     const db = setup()
     const result = await transfer(db, { fromId: 1, toId: 2, amountCents: -1_000, uid: 1 })
 
-    expect(result).toMatchObject({ ok: true })
-    expect(balanceOf(db, 1)).toBe(10_000 + 1_000)
-    expect(balanceOf(db, 2)).toBe(5_000 - 1_000)
+    expect(result).toEqual({ ok: false, reason: 'invalid_amount' })
+    expect(balanceOf(db, 1)).toBe(10_000)
+    expect(balanceOf(db, 2)).toBe(5_000)
   })
 
   it('rejects an overdraft, leaving balances unchanged (single request)', async () => {
