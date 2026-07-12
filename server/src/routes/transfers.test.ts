@@ -115,7 +115,7 @@ describe('transfers routes', () => {
     expect(balanceOf('CHK-2001')).toBe(25_000)
   })
 
-  it('-- vulnerable state, tightened at fix/phase-3-concurrency -- lets concurrent transfers overdraw', async () => {
+  it('-- fixed at fix/phase-3-concurrency -- rejects all but one of several concurrent overdrawing transfers', async () => {
     const agent = await loginAsAlice()
     const fromId = accountId('CHK-1001')
     const toId = accountId('CHK-2001')
@@ -126,8 +126,8 @@ describe('transfers routes', () => {
     ])
 
     const succeeded = responses.filter((r) => r.status === 201)
-    expect(succeeded.length).toBeGreaterThan(1)
-    expect(balanceOf('CHK-1001')).toBeLessThan(0)
+    expect(succeeded.length).toBe(1)
+    expect(balanceOf('CHK-1001')).toBeGreaterThanOrEqual(0)
   })
 
   it('logs balance_after_cents and idempotency_key on transfer.completed', async () => {

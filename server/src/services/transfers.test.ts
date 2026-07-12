@@ -91,11 +91,8 @@ describe('transfer', () => {
     expect(balanceOf(db, 1)).toBe(10_000)
   })
 
-  it('-- vulnerable state, tightened at fix/phase-3-concurrency -- lets concurrent transfers overdraw past a single balance check', async () => {
+  it('-- fixed at fix/phase-3-concurrency -- rejects all but one of several concurrent overdrawing transfers', async () => {
     const db = setup()
-    // Alice has 10,000 cents. Three concurrent transfers of 6,000 each
-    // individually look fundable (10,000 >= 6,000) at the pre-await read,
-    // but only one can actually be honored.
     const results = await Promise.all([
       transfer(db, { fromId: 1, toId: 2, amountCents: 6_000, uid: 1 }),
       transfer(db, { fromId: 1, toId: 2, amountCents: 6_000, uid: 1 }),
@@ -103,11 +100,11 @@ describe('transfer', () => {
     ])
 
     const succeeded = results.filter((r) => r.ok)
-    expect(succeeded.length).toBeGreaterThan(1)
-    expect(balanceOf(db, 1)).toBeLessThan(0)
+    expect(succeeded.length).toBe(1)
+    expect(balanceOf(db, 1)).toBeGreaterThanOrEqual(0)
   })
 
-  it('-- vulnerable state, tightened at fix/phase-3-concurrency -- lets a replayed idempotency key execute twice concurrently', async () => {
+  it('-- fixed at fix/phase-3-concurrency -- executes a replayed idempotency key exactly once', async () => {
     const db = setup()
     const key = 'race-key-1'
     const results = await Promise.all([
@@ -116,7 +113,7 @@ describe('transfer', () => {
     ])
 
     const transferIds = new Set(results.filter((r) => r.ok).map((r) => (r as { transferId: number }).transferId))
-    expect(transferIds.size).toBeGreaterThan(1)
-    expect(balanceOf(db, 1)).toBe(10_000 - 200)
+    expect(transferIds.size).toBe(1)
+    expect(balanceOf(db, 1)).toBe(10_000 - 100)
   })
 })
