@@ -117,27 +117,24 @@ describe('payment links routes', () => {
     expect(res.status).toBe(404)
   })
 
-  it(
-    '-- vulnerable state, tightened at fix/phase-3-tampered-recipient -- a to_account_id override redirects the payment away from the link owner',
-    async () => {
-      const bobAgent = await loginAs('bob@scpay.test')
-      const created = await bobAgent
-        .post('/api/payment-links')
-        .send({ amount_cents: 5_000, note: 'Rent', account_id: accountId('CHK-2001') })
-      const bobBalanceBefore = balanceOf('CHK-2001')
+  it('ignores a to_account_id override and always pays the link account (tampered-recipient fixed)', async () => {
+    const bobAgent = await loginAs('bob@scpay.test')
+    const created = await bobAgent
+      .post('/api/payment-links')
+      .send({ amount_cents: 5_000, note: 'Rent', account_id: accountId('CHK-2001') })
+    const bobBalanceBefore = balanceOf('CHK-2001')
 
-      const aliceAgent = await loginAs('alice@scpay.test')
-      const res = await aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send({
-        from_account_id: accountId('CHK-1001'),
-        to_account_id: accountId('SAV-1002'),
-      })
+    const aliceAgent = await loginAs('alice@scpay.test')
+    const res = await aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send({
+      from_account_id: accountId('CHK-1001'),
+      to_account_id: accountId('SAV-1002'),
+    })
 
-      expect(res.status).toBe(201)
-      expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore)
-    },
-  )
+    expect(res.status).toBe(201)
+    expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore + 5_000)
+  })
 
-  it('logs payment_link.paid with the true link_account_id and what was actually credited', async () => {
+  it('logs payment_link.paid with matching link_account_id and actual_to_account_id (tampered-recipient fixed)', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const bobAgent = await loginAs('bob@scpay.test')
     const created = await bobAgent
@@ -156,7 +153,7 @@ describe('payment links routes', () => {
     expect(line).toMatchObject({
       outcome: 'success',
       link_account_id: accountId('CHK-2001'),
-      actual_to_account_id: accountId('SAV-1002'),
+      actual_to_account_id: accountId('CHK-2001'),
     })
     logSpy.mockRestore()
   })
