@@ -13,6 +13,11 @@ COPY client/package.json client/package.json
 # lockfile is generated (a known npm limitation with these multi-platform
 # native packages) -- npm install tolerates the missing Linux variant here.
 # Build-stage only; the runtime stage never touches this lockfile mutation.
+# Verified 2026-07-12: `npm ci` fails here with EUSAGE, "Missing:
+# @emnapi/core@1.11.2 from lock file" / "@emnapi/runtime@1.11.2 from lock
+# file" -- exactly the platform-optional-dependency gap described above,
+# not a stale comment. The docker-smoke CI job below is what catches any
+# future drift instead.
 RUN npm install
 COPY . .
 RUN npm run build
