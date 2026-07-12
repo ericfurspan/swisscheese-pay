@@ -1,7 +1,7 @@
 process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { signToken } from '../auth/token.js'
 import { createApp } from '../app.js'
 import { getDb } from '../db/connection.js'
@@ -101,5 +101,27 @@ describe('profile routes', () => {
       .send({ full_name: 'Nobody' })
 
     expect(res.status).toBe(401)
+  })
+
+  it('logs profile.update with changed_fields on a name-only update (state-independent)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent.patch('/api/profile').send({ full_name: 'Alice Updated' })
+
+    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'profile.update')
+    expect(line).toMatchObject({ event: 'profile.update', outcome: 'success', changed_fields: ['full_name'] })
+    logSpy.mockRestore()
+  })
+
+  it('-- vulnerable state, tightened at fix/phase-2-mass-assignment -- logs role in changed_fields when a role field is smuggled in', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent.patch('/api/profile').send({ full_name: 'Alice Updated', role: 'admin' })
+
+    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'profile.update')
+    expect(line?.changed_fields).toEqual(['full_name', 'role'])
+    logSpy.mockRestore()
   })
 })

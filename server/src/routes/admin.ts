@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { getDb } from '../db/connection.js'
+import { logSecurity } from '../log/security.js'
 import { requireAdmin } from '../middleware/requireAdmin.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 
@@ -11,5 +12,16 @@ adminRouter.use(requireAdmin)
 adminRouter.get('/users', (req, res) => {
   const db = getDb()
   const rows = db.prepare('SELECT * FROM users ORDER BY id').all()
+
+  logSecurity({
+    event: 'admin.action',
+    actor_user_id: req.user!.uid,
+    target: 'admin:users:list',
+    outcome: 'success',
+    request_id: req.id,
+    ip: req.ip,
+    detail: { action: 'list_users', row_count: rows.length },
+  })
+
   res.status(200).json(rows)
 })

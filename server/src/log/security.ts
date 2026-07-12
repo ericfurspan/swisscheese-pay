@@ -9,6 +9,7 @@ export type SecurityEvent =
   | 'transfer.completed'
   | 'transfer.failed'
   | 'admin.action'
+  | 'profile.update'
 
 export interface SecurityLogEntry {
   event: SecurityEvent

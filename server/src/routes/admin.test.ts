@@ -1,7 +1,7 @@
 process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../app.js'
 import { getDb } from '../db/connection.js'
 import { resetSchema } from '../db/schema.js'
@@ -43,5 +43,16 @@ describe('GET /api/admin/users', () => {
     const bob = res.body.find((u: { email: string }) => u.email === 'bob@scpay.test')
     expect(bob).toHaveProperty('password_hash')
     expect(bob.ssn).toBe('987-65-4321')
+  })
+
+  it('logs admin.action with row_count on a successful listing', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAs('admin@scpay.test')
+
+    await agent.get('/api/admin/users')
+
+    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'admin.action')
+    expect(line).toMatchObject({ event: 'admin.action', outcome: 'success', action: 'list_users', row_count: 3 })
+    logSpy.mockRestore()
   })
 })

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { getDb } from '../db/connection.js'
+import { logSecurity } from '../log/security.js'
 import { requireAuth, SESSION_COOKIE } from '../middleware/requireAuth.js'
 
 export const profileRouter = Router()
@@ -46,12 +47,16 @@ profileRouter.patch('/', (req, res) => {
   }
 
   const db = getDb()
-  const { changes } =
-    role !== undefined
-      ? db
-          .prepare('UPDATE users SET full_name = ?, role = ? WHERE id = ?')
-          .run(fullName, role, req.user!.uid)
-      : db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(fullName, req.user!.uid)
+  const changedFields = ['full_name']
+  let changes: number
+  if (role !== undefined) {
+    changedFields.push('role')
+    changes = db
+      .prepare('UPDATE users SET full_name = ?, role = ? WHERE id = ?')
+      .run(fullName, role, req.user!.uid).changes
+  } else {
+    changes = db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(fullName, req.user!.uid).changes
+  }
 
   // See the GET handler above: a validly-signed token can outlive its user
   // row. Without this check a stale session would get a 200 claiming the
@@ -61,6 +66,16 @@ profileRouter.patch('/', (req, res) => {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
+
+  logSecurity({
+    event: 'profile.update',
+    actor_user_id: req.user!.uid,
+    target: `user:${req.user!.uid}`,
+    outcome: 'success',
+    request_id: req.id,
+    ip: req.ip,
+    detail: { changed_fields: changedFields },
+  })
 
   res.status(200).json({ id: req.user!.uid, full_name: fullName })
 })
