@@ -28,8 +28,9 @@ function setup(): Database.Database {
 }
 
 function balanceOf(db: Database.Database, accountId: number): number {
-  return (db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(accountId) as AccountRow)
-    .balance_cents
+  return (
+    db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(accountId) as AccountRow
+  ).balance_cents
 }
 
 describe('transfer', () => {
@@ -41,7 +42,10 @@ describe('transfer', () => {
     expect(balanceOf(db, 1)).toBe(9_000)
     expect(balanceOf(db, 2)).toBe(6_000)
 
-    const row = db.prepare('SELECT * FROM transfers').get() as { status: string; amount_cents: number }
+    const row = db.prepare('SELECT * FROM transfers').get() as {
+      status: string
+      amount_cents: number
+    }
     expect(row).toMatchObject({ status: 'completed', amount_cents: 1_000 })
   })
 
@@ -117,7 +121,9 @@ describe('transfer', () => {
       transfer(db, { fromId: 1, toId: 2, amountCents: 100, uid: 1, idempotencyKey: key }),
     ])
 
-    const transferIds = new Set(results.filter((r) => r.ok).map((r) => (r as { transferId: number }).transferId))
+    const transferIds = new Set(
+      results.filter((r) => r.ok).map((r) => (r as { transferId: number }).transferId),
+    )
     expect(transferIds.size).toBe(1)
     expect(balanceOf(db, 1)).toBe(10_000 - 100)
   })

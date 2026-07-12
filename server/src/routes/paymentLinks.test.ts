@@ -36,8 +36,9 @@ function accountId(accountNumber: string): number {
 
 function balanceOf(accountNumber: string): number {
   return (
-    getDb().prepare('SELECT balance_cents FROM accounts WHERE account_number = ?').get(accountNumber) as
-      BalanceRow
+    getDb()
+      .prepare('SELECT balance_cents FROM accounts WHERE account_number = ?')
+      .get(accountNumber) as BalanceRow
   ).balance_cents
 }
 

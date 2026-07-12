@@ -40,8 +40,9 @@ export function AccountPage() {
         <ul>
           {transactions.map((transaction) => (
             <li key={transaction.id}>
-              {transaction.created_at} &mdash; {transaction.memo ?? transaction.counterparty ?? 'Transaction'}{' '}
-              &mdash; {formatCents(transaction.amount_cents)}
+              {transaction.created_at} &mdash;{' '}
+              {transaction.memo ?? transaction.counterparty ?? 'Transaction'} &mdash;{' '}
+              {formatCents(transaction.amount_cents)}
             </li>
           ))}
         </ul>

@@ -61,7 +61,9 @@ describe('profile routes', () => {
 
     await agent.patch('/api/profile').send({ full_name: 'Hacked', id: 2 })
 
-    const bob = getDb().prepare('SELECT full_name FROM users WHERE email = ?').get('bob@scpay.test') as {
+    const bob = getDb()
+      .prepare('SELECT full_name FROM users WHERE email = ?')
+      .get('bob@scpay.test') as {
       full_name: string
     }
     expect(bob.full_name).toBe('Bob Brown')
@@ -70,10 +72,14 @@ describe('profile routes', () => {
   it('ignores a role field in the request body (mass assignment fixed)', async () => {
     const agent = await loginAsAlice()
 
-    const res = await agent.patch('/api/profile').send({ full_name: 'Alice Updated', role: 'admin' })
+    const res = await agent
+      .patch('/api/profile')
+      .send({ full_name: 'Alice Updated', role: 'admin' })
     expect(res.status).toBe(200)
 
-    const alice = getDb().prepare('SELECT role, full_name FROM users WHERE email = ?').get('alice@scpay.test') as {
+    const alice = getDb()
+      .prepare('SELECT role, full_name FROM users WHERE email = ?')
+      .get('alice@scpay.test') as {
       role: string
       full_name: string
     }
@@ -111,8 +117,14 @@ describe('profile routes', () => {
 
     await agent.patch('/api/profile').send({ full_name: 'Alice Updated' })
 
-    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'profile.update')
-    expect(line).toMatchObject({ event: 'profile.update', outcome: 'success', changed_fields: ['full_name'] })
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'profile.update')
+    expect(line).toMatchObject({
+      event: 'profile.update',
+      outcome: 'success',
+      changed_fields: ['full_name'],
+    })
     logSpy.mockRestore()
   })
 
@@ -122,7 +134,9 @@ describe('profile routes', () => {
 
     await agent.patch('/api/profile').send({ full_name: 'Alice Updated', role: 'admin' })
 
-    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'profile.update')
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'profile.update')
     expect(line?.changed_fields).toEqual(['full_name'])
     logSpy.mockRestore()
   })

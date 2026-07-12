@@ -16,7 +16,9 @@ function requireSecret(): string {
   const secret = process.env.JWT_SECRET
   if (!secret) throw new Error('JWT_SECRET must be set')
   if (secret.length < MIN_SECRET_LENGTH) {
-    throw new Error(`JWT_SECRET must be at least ${MIN_SECRET_LENGTH} characters (got ${secret.length})`)
+    throw new Error(
+      `JWT_SECRET must be at least ${MIN_SECRET_LENGTH} characters (got ${secret.length})`,
+    )
   }
   return secret
 }

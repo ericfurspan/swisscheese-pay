@@ -14,9 +14,15 @@ function stubFetch(loggedInRef: { current: boolean }) {
     const url = String(input)
 
     if (url === '/api/profile') {
-      if (!loggedInRef.current) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+      if (!loggedInRef.current)
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
       return new Response(
-        JSON.stringify({ id: 1, email: 'alice@scpay.test', full_name: 'Alice', ssn: '***-**-6789' }),
+        JSON.stringify({
+          id: 1,
+          email: 'alice@scpay.test',
+          full_name: 'Alice',
+          ssn: '***-**-6789',
+        }),
         { status: 200 },
       )
     }
@@ -81,9 +87,12 @@ describe('LoginPage', () => {
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input)
-        if (url === '/api/profile') return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+        if (url === '/api/profile')
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
         if (url === '/api/auth/login') {
-          return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401 })
+          return new Response(JSON.stringify({ error: 'Invalid email or password' }), {
+            status: 401,
+          })
         }
         return new Response(null, { status: 404 })
       }),

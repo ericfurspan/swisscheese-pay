@@ -3,10 +3,7 @@ import { isAccountOwnedByUser } from './accounts.js'
 import { mockFraudCheck } from './fraudCheck.js'
 
 export type TransferFailureReason =
-  | 'not_owner'
-  | 'invalid_amount'
-  | 'invalid_destination'
-  | 'insufficient_funds'
+  'not_owner' | 'invalid_amount' | 'invalid_destination' | 'insufficient_funds'
 
 export type TransferResult =
   | { ok: true; transferId: number; balanceAfterCents: number }
@@ -31,7 +28,10 @@ interface TransferIdRow {
   id: number
 }
 
-export async function transfer(db: Database.Database, input: TransferInput): Promise<TransferResult> {
+export async function transfer(
+  db: Database.Database,
+  input: TransferInput,
+): Promise<TransferResult> {
   const { fromId, toId, amountCents, uid, idempotencyKey } = input
 
   if (!isAccountOwnedByUser(db, fromId, uid)) {
@@ -55,7 +55,9 @@ export async function transfer(db: Database.Database, input: TransferInput): Pro
   const debitStmt = db.prepare(
     'UPDATE accounts SET balance_cents = balance_cents - ? WHERE id = ? AND balance_cents >= ?',
   )
-  const creditStmt = db.prepare('UPDATE accounts SET balance_cents = balance_cents + ? WHERE id = ?')
+  const creditStmt = db.prepare(
+    'UPDATE accounts SET balance_cents = balance_cents + ? WHERE id = ?',
+  )
   const insertTransfer = db.prepare(
     "INSERT INTO transfers (from_account_id, to_account_id, amount_cents, status, idempotency_key) VALUES (?, ?, ?, 'completed', ?)",
   )
@@ -81,7 +83,12 @@ export async function transfer(db: Database.Database, input: TransferInput): Pro
     const credited = creditStmt.run(amountCents, toId)
     if (credited.changes === 0) throw new InvalidDestinationError()
 
-    const { lastInsertRowid } = insertTransfer.run(fromId, toId, amountCents, idempotencyKey ?? null)
+    const { lastInsertRowid } = insertTransfer.run(
+      fromId,
+      toId,
+      amountCents,
+      idempotencyKey ?? null,
+    )
     insertTransaction.run(fromId, 'Transfer', 'Transfer out', -amountCents)
     insertTransaction.run(toId, 'Transfer', 'Transfer in', amountCents)
     const balanceAfterCents = (balanceStmt.get(fromId) as BalanceRow).balance_cents

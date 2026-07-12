@@ -26,7 +26,8 @@ export function DashboardPage() {
           {accounts.map((account) => (
             <li key={account.id}>
               <Link to={`/accounts/${account.id}`}>
-                {account.account_number} ({account.type}) &mdash; {formatCents(account.balance_cents)}
+                {account.account_number} ({account.type}) &mdash;{' '}
+                {formatCents(account.balance_cents)}
               </Link>
             </li>
           ))}

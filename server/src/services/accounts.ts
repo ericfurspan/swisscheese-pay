@@ -35,8 +35,7 @@ interface OwnerRow {
 // states to compute actor_user_id != owner_user_id.
 export function getAccountOwnerId(db: Database.Database, accountId: number): number | undefined {
   const row = db.prepare('SELECT user_id FROM accounts WHERE id = ?').get(accountId) as
-    | OwnerRow
-    | undefined
+    OwnerRow | undefined
   return row?.user_id
 }
 
@@ -44,7 +43,11 @@ export function getAccountOwnerId(db: Database.Database, accountId: number): num
 // independent of getAccountForUser so Phase 1's BOLA vuln (account/transaction
 // reads only) can't incidentally break transfer authz -- money-movement bugs
 // are a separate, later vuln phase.
-export function isAccountOwnedByUser(db: Database.Database, accountId: number, uid: number): boolean {
+export function isAccountOwnedByUser(
+  db: Database.Database,
+  accountId: number,
+  uid: number,
+): boolean {
   return getAccountOwnerId(db, accountId) === uid
 }
 

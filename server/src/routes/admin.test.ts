@@ -52,8 +52,15 @@ describe('GET /api/admin/users', () => {
 
     await agent.get('/api/admin/users')
 
-    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'admin.action')
-    expect(line).toMatchObject({ event: 'admin.action', outcome: 'success', action: 'list_users', row_count: 3 })
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'admin.action')
+    expect(line).toMatchObject({
+      event: 'admin.action',
+      outcome: 'success',
+      action: 'list_users',
+      row_count: 3,
+    })
     logSpy.mockRestore()
   })
 })

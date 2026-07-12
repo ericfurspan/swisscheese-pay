@@ -26,7 +26,11 @@ const FAILURE_MESSAGE: Record<TransferFailureReason, string> = {
 transfersRouter.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { from_account_id: fromId, to_account_id: toId, amount_cents: amountCents } = req.body ?? {}
+    const {
+      from_account_id: fromId,
+      to_account_id: toId,
+      amount_cents: amountCents,
+    } = req.body ?? {}
     if (typeof fromId !== 'number' || typeof toId !== 'number' || typeof amountCents !== 'number') {
       res
         .status(400)
@@ -35,7 +39,8 @@ transfersRouter.post(
     }
 
     const idempotencyKeyHeader = req.get('Idempotency-Key')
-    const idempotencyKey = typeof idempotencyKeyHeader === 'string' ? idempotencyKeyHeader : undefined
+    const idempotencyKey =
+      typeof idempotencyKeyHeader === 'string' ? idempotencyKeyHeader : undefined
 
     const db = getDb()
     const uid = req.user!.uid

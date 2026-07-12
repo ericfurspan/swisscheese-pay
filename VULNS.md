@@ -53,6 +53,7 @@ in app code. Within branch `phase-1-bola`, the vulnerability is introduced at ta
 and the branch are kept locally so either state stays `git checkout`-able.
 
 ### Exploit
+
 [`security/exploits/phase-1-bola.sh`](security/exploits/phase-1-bola.sh) logs in as a
 single seeded user (alice) and, using only her session cookie, enumerates a small range of
 sequential account IDs against `GET /api/accounts/:id` and
@@ -62,6 +63,7 @@ authenticating as bob: a real BOLA/IDOR, cross-user data disclosure through
 attacker-controlled object IDs, not a hardcoded single-target guess.
 
 ### Root cause
+
 `getAccountForUser` (`server/src/services/accounts.ts`) is the single choke point
 behind both `GET /api/accounts/:id` and the nested `GET /api/accounts/:id/transactions`
 route, so one line change exposes both endpoints. Commit `127c28d` dropped the ownership
@@ -77,6 +79,7 @@ itself simply started succeeding for accounts the caller doesn't own, so the sam
 returns `200` with foreign data instead of `404`.
 
 ### Fix
+
 Commit `8ae2737` restores the ownership predicate:
 
 ```ts
@@ -92,6 +95,7 @@ accounts they don't own, which is out of this phase's scope; money-movement bugs
 separate, later vuln phase.)
 
 ### Detection
+
 [`security/detections/authz-account-access.sh`](security/detections/authz-account-access.sh)
 flags any `authz.account_access` log line where `outcome == "success"` **and**
 `actor_user_id != owner_user_id`. The `authz.account_access` event
@@ -125,10 +129,11 @@ both vulnerable pieces are live as of tag `vuln/phase-2-mass-assignment` (commit
 are kept locally.
 
 ### Exploit
+
 [`security/exploits/phase-2-mass-assignment.sh`](security/exploits/phase-2-mass-assignment.sh)
 chains both halves as a single attacker session, logged in only as the seeded customer
 alice: (1) `PATCH /api/profile` with an unexpected `role: "admin"` field, silently
-accepted; (2) calling the new admin endpoint with alice's *original* session still
+accepted; (2) calling the new admin endpoint with alice's _original_ session still
 403s, because `role` is baked into the session JWT at login and never re-checked
 against the DB; (3) logging out and back in refreshes the token with the now-escalated
 role; (4) `GET /api/admin/users` now returns `200` with every seeded user's raw row,
@@ -136,6 +141,7 @@ including `password_hash` and unmasked `ssn` — an unprivileged customer, with 
 special access beyond her own login, dumps the full user table's sensitive fields.
 
 ### Root cause
+
 Two independent bugs chained together:
 
 **Part 1 — mass assignment (`server/src/routes/profile.ts`, commit `c4d0ae7`).** The
@@ -147,11 +153,13 @@ the request body, with no check that the caller is already an admin:
 const { full_name: fullName, role } = req.body ?? {}
 // ...
 role !== undefined
-  ? db.prepare('UPDATE users SET full_name = ?, role = ? WHERE id = ?').run(fullName, role, req.user!.uid)
+  ? db
+      .prepare('UPDATE users SET full_name = ?, role = ? WHERE id = ?')
+      .run(fullName, role, req.user!.uid)
   : db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(fullName, req.user!.uid)
 ```
 
-The bug is the missing *authorization* check on which fields a self-service update may
+The bug is the missing _authorization_ check on which fields a self-service update may
 touch, not a missing input-validation check — `role` still only accepts DB-enforced
 values.
 
@@ -170,6 +178,7 @@ res.status(200).json(rows)
 column list and never returns `password_hash` or an unmasked `ssn`.
 
 ### Fix
+
 Commit `e259c09` reverts both halves. `PATCH /api/profile` (`server/src/routes/profile.ts`)
 drops `role` from the accepted fields entirely — the handler only ever destructures and
 writes `full_name` again. `GET /api/admin/users` (`server/src/routes/admin.ts`) switches
@@ -180,6 +189,7 @@ through a new shared `maskSsn` helper
 how PII is redacted. `password_hash` is never selected at all.
 
 ### Detection
+
 Two rules, both validated against
 [`security/detections/sample-vulnerable-phase2.jsonl`](security/detections/sample-vulnerable-phase2.jsonl),
 a log sample captured by running the exploit script against the vulnerable branch state
@@ -194,7 +204,7 @@ check):
 - [`security/detections/admin-post-escalation.sh`](security/detections/admin-post-escalation.sh)
   (Rule 2) is a correlation rule: it flags an `admin.action` event where the same
   `actor_user_id` has an earlier `profile.update` with `role` in `changed_fields`. This
-  catches what Rule 1 alone can't — that the escalation was actually *used* — without
+  catches what Rule 1 alone can't — that the escalation was actually _used_ — without
   false-positiving on the legitimate seeded admin's routine listing call, which the
   sample also includes and the rule correctly excludes.
 
@@ -213,6 +223,7 @@ fixed at tag `fix/phase-3-concurrency` (commit `1c5e8fb`). `main` receives only 
 fixed state via `git merge --no-ff`; both tags and the branch are kept locally.
 
 ### Exploit
+
 [`security/exploits/phase-3-concurrency.mjs`](security/exploits/phase-3-concurrency.mjs)
 is a Node script (not bash) firing concurrent `fetch` calls via `Promise.all`, logged in
 as the seeded customer alice. Real HTTP concurrency requires genuinely overlapping
@@ -230,21 +241,25 @@ gap:
   prevent.
 
 ### Root cause
+
 One shared cause (`server/src/services/transfers.ts`, commit `36af5fa`), exploited two
 ways. `better-sqlite3` is synchronous and Node is single-threaded, so the pre-Phase-3
 `transfer()` — a single guarded `UPDATE ... WHERE balance_cents >= ?` inside one
 `db.transaction()` — had no interleaving window. Phase 3 makes `transfer()` `async` to
 model a realistic feature (a fraud/velocity check against a hypothetical external
-service, `mockFraudCheck()`), and the vulnerable version puts the checks *before* that
+service, `mockFraudCheck()`), and the vulnerable version puts the checks _before_ that
 `await` instead of inside the synchronous transaction that follows it:
 
 ```ts
 // vulnerable state
 const balanceRow = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId)
-if (!balanceRow || balanceRow.balance_cents < amountCents) return { ok: false, reason: 'insufficient_funds' }
+if (!balanceRow || balanceRow.balance_cents < amountCents)
+  return { ok: false, reason: 'insufficient_funds' }
 
 if (idempotencyKey !== undefined) {
-  const existing = db.prepare('SELECT id FROM transfers WHERE idempotency_key = ?').get(idempotencyKey)
+  const existing = db
+    .prepare('SELECT id FROM transfers WHERE idempotency_key = ?')
+    .get(idempotencyKey)
   if (existing) return { ok: true, transferId: existing.id, balanceAfterCents /* ... */ }
 }
 
@@ -264,6 +279,7 @@ unconditional, with no `WHERE balance_cents >= ?` guard, because the pre-await r
 already (incorrectly) decided sufficiency.
 
 ### Fix
+
 Commit `1c5e8fb` moves both checks so they're decided **only** by statements inside a
 single synchronous `db.transaction()` call, evaluated after the `await` rather than
 before it:
@@ -274,7 +290,9 @@ await mockFraudCheck() // still runs -- a realistic feature, just no longer load
 
 const run = db.transaction(() => {
   if (idempotencyKey !== undefined) {
-    const existing = db.prepare('SELECT id FROM transfers WHERE idempotency_key = ?').get(idempotencyKey)
+    const existing = db
+      .prepare('SELECT id FROM transfers WHERE idempotency_key = ?')
+      .get(idempotencyKey)
     if (existing) return { transferId: existing.id, balanceAfterCents /* ... */ }
   }
 
@@ -291,6 +309,7 @@ actually makes this correct, not the schema change: `idempotency_key` also gets 
 `UNIQUE` constraint as a defense-in-depth backstop, but it's not the fix mechanism.
 
 ### Detection
+
 Two rules, both purely log-based (no correlation needed), validated against
 [`security/detections/sample-vulnerable-phase3-concurrency.jsonl`](security/detections/sample-vulnerable-phase3-concurrency.jsonl),
 a log sample captured by running the exploit script against the vulnerable branch state:
@@ -302,7 +321,7 @@ a log sample captured by running the exploit script against the vulnerable branc
   correctly-guarded debit can never produce this.
 - [`security/detections/transfer-replay.sh`](security/detections/transfer-replay.sh)
   (Rule 2) flags any `idempotency_key` whose `transfer.completed` events resolve to more
-  than one *distinct* `transfer_id`. Deliberately not keyed on event count: even in the
+  than one _distinct_ `transfer_id`. Deliberately not keyed on event count: even in the
   fixed state, a retried request with the same key logs its own `transfer.completed`
   line (returning the original transfer's ID) — that's correct dedupe behavior, not
   evidence of replay. Distinct-ID count is the actual discriminator.
@@ -328,15 +347,16 @@ branch. `main` receives only the fixed state via `git merge --no-ff`; all tags a
 branch are kept locally.
 
 ### Exploit
+
 Two independent scripts, both attacker's-eye view from the seeded customer accounts:
 
 - [`security/exploits/phase-3-negative-amount.sh`](security/exploits/phase-3-negative-amount.sh):
   alice sends `POST /api/transfers` with a negative `amount_cents` targeting bob's
   account. Against the vulnerable state it succeeds (`201`) — alice's balance goes
-  *up*, bob's balance goes *down*, despite bob never authorizing anything.
+  _up_, bob's balance goes _down_, despite bob never authorizing anything.
 - [`security/exploits/phase-3-tampered-recipient.sh`](security/exploits/phase-3-tampered-recipient.sh):
   bob creates a payment link naming his own checking account as recipient; alice pays
-  it but adds a `to_account_id` field in the request body pointing at her *other*
+  it but adds a `to_account_id` field in the request body pointing at her _other_
   account. Against the vulnerable state the payment still succeeds (`201`), but bob is
   never credited — the money lands in alice's other account instead.
 
@@ -377,6 +397,7 @@ payer authenticating to pay a specific link has no legitimate reason to name a
 different destination.
 
 ### Fix
+
 Two independent reverts, matching the two independent bugs:
 
 - Commit `16b4d4d` restores the `amountCents <= 0` rejection — identical to the
@@ -386,6 +407,7 @@ Two independent reverts, matching the two independent bugs:
   request body able to override it.
 
 ### Detection
+
 Two rules, both purely log-based, validated against the shared
 [`security/detections/sample-vulnerable-phase3-input-validation.jsonl`](security/detections/sample-vulnerable-phase3-input-validation.jsonl)
 (one capture per bug, appended to the same file since both were captured while live on
@@ -423,6 +445,7 @@ codebase (`verifyToken` pins `algorithms: ['HS256']`) and was out of scope for t
 phase — one well-developed weak-secret example, not the full three-technique JWT list.
 
 ### Exploit
+
 [`security/exploits/phase-4-jwt.mjs`](security/exploits/phase-4-jwt.mjs) (Node, using
 the `jsonwebtoken` library directly for local signing/verification, not just HTTP calls)
 runs as a real, unprivileged seeded customer (alice) with no special access:
@@ -441,6 +464,7 @@ runs as a real, unprivileged seeded customer (alice) with no special access:
    role being `customer`.
 
 ### Root cause
+
 One cause (`docker-compose.yml`'s explicit weak `JWT_SECRET`, `vuln/phase-4-jwt`'s
 commit), two forgeries. The HMAC-SHA256 signature over `{uid, role, jti}` is crackable
 via offline dictionary attack in seconds once a low-entropy secret is in play. Once the
@@ -452,6 +476,7 @@ signature guarantee worthless. Anyone holding the cracked secret controls both f
 escalation to admin).
 
 ### Fix
+
 Commit `3722e11`, two parts:
 
 1. `docker-compose.yml`'s `JWT_SECRET` reverts to unset, so `docker-entrypoint.sh`'s
@@ -466,6 +491,7 @@ No change to `verifyToken`'s validation logic itself; it was already correct. Th
 it validated against was the actual bug.
 
 ### Detection
+
 New instrumentation was required here, unlike Phase 1-3: JWTs are stateless, so there
 was no existing independent ground truth for "was this specific token legitimately
 issued." `signToken` (`server/src/auth/token.ts`) now generates a `jti`
@@ -485,7 +511,7 @@ of their own (no network position or token sniffing required, since it's their o
 captured session), so a forgery that reuses that real `jti` while changing `uid` or
 `role` would pass an existence check while still being exactly the impersonation/
 escalation forgery this phase targets. Binding the full claim set catches it: the
-forged token's `jti` is real, but not real *for that uid/role*, and the rule reports
+forged token's `jti` is real, but not real _for that uid/role_, and the rule reports
 those independently, so one rule still catches both the impersonation (`uid` mismatch)
 and escalation (`role` mismatch) forgeries. Validated against
 [`security/detections/sample-vulnerable-phase4-jwt.jsonl`](security/detections/sample-vulnerable-phase4-jwt.jsonl):

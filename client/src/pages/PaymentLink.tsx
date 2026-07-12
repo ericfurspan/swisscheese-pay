@@ -57,7 +57,11 @@ export function PaymentLinkPage() {
       <h1>Payment Links</h1>
       <form onSubmit={handleSubmit}>
         <label htmlFor="account">Receiving account</label>
-        <select id="account" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+        <select
+          id="account"
+          value={accountId}
+          onChange={(event) => setAccountId(event.target.value)}
+        >
           {accounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.account_number}
@@ -84,7 +88,8 @@ export function PaymentLinkPage() {
       <ul>
         {links.map((link) => (
           <li key={link.id}>
-            /pay/{link.token} &mdash; {formatCents(link.amount_cents)} {link.note && `(${link.note})`}
+            /pay/{link.token} &mdash; {formatCents(link.amount_cents)}{' '}
+            {link.note && `(${link.note})`}
           </li>
         ))}
       </ul>

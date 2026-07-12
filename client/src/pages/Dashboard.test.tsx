@@ -20,8 +20,20 @@ describe('DashboardPage', () => {
         if (url === '/api/accounts') {
           return new Response(
             JSON.stringify([
-              { id: 1, account_number: 'CHK-1001', type: 'checking', balance_cents: 100_000, created_at: '' },
-              { id: 2, account_number: 'SAV-1002', type: 'savings', balance_cents: 500_000, created_at: '' },
+              {
+                id: 1,
+                account_number: 'CHK-1001',
+                type: 'checking',
+                balance_cents: 100_000,
+                created_at: '',
+              },
+              {
+                id: 2,
+                account_number: 'SAV-1002',
+                type: 'savings',
+                balance_cents: 500_000,
+                created_at: '',
+              },
             ]),
             { status: 200 },
           )

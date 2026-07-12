@@ -46,7 +46,10 @@ describe('api client', () => {
   it('throws an ApiError with the status and server message on failure', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401 })),
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401 }),
+      ),
     )
 
     await expect(api.post('/auth/login', {})).rejects.toMatchObject(
@@ -55,7 +58,10 @@ describe('api client', () => {
   })
 
   it('resolves with undefined for a 204 response', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 204 })),
+    )
 
     await expect(api.post('/auth/logout')).resolves.toBeUndefined()
   })

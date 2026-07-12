@@ -46,9 +46,13 @@ paymentLinksRouter.post('/', (req, res) => {
     'INSERT INTO payment_links (user_id, account_id, token, amount_cents, note) VALUES (?, ?, ?, ?, ?)',
   ).run(req.user!.uid, accountId, token, amountCents, note ?? null)
 
-  res
-    .status(201)
-    .json({ path: `/pay/${token}`, token, account_id: accountId, amount_cents: amountCents, note: note ?? null })
+  res.status(201).json({
+    path: `/pay/${token}`,
+    token,
+    account_id: accountId,
+    amount_cents: amountCents,
+    note: note ?? null,
+  })
 })
 
 paymentLinksRouter.get('/', (req, res) => {
@@ -69,7 +73,8 @@ paymentLinksRouter.get('/:token', (req, res) => {
   const db = getDb()
   const row = db
     .prepare('SELECT token, amount_cents, note FROM payment_links WHERE token = ?')
-    .get(req.params.token) as { token: string; amount_cents: number; note: string | null } | undefined
+    .get(req.params.token) as
+    { token: string; amount_cents: number; note: string | null } | undefined
 
   if (!row) {
     res.status(404).json({ error: 'Payment link not found' })
@@ -102,7 +107,12 @@ paymentLinksRouter.post(
     // own account_id -- nothing from the request body can override it.
     const toId = link.account_id
 
-    const result = await transfer(db, { fromId, toId, amountCents: link.amount_cents, uid: req.user!.uid })
+    const result = await transfer(db, {
+      fromId,
+      toId,
+      amountCents: link.amount_cents,
+      uid: req.user!.uid,
+    })
 
     logSecurity({
       event: 'payment_link.paid',
@@ -111,11 +121,16 @@ paymentLinksRouter.post(
       outcome: result.ok ? 'success' : 'failure',
       request_id: req.id,
       ip: req.ip,
-      detail: { token: req.params.token, link_account_id: link.account_id, actual_to_account_id: toId },
+      detail: {
+        token: req.params.token,
+        link_account_id: link.account_id,
+        actual_to_account_id: toId,
+      },
     })
 
     if (!result.ok) {
-      const status = result.reason === 'not_owner' ? 404 : result.reason === 'insufficient_funds' ? 422 : 400
+      const status =
+        result.reason === 'not_owner' ? 404 : result.reason === 'insufficient_funds' ? 422 : 400
       res.status(status).json({ error: result.reason })
       return
     }

@@ -50,7 +50,11 @@ describe('auth routes', () => {
 
     expect(res.status).toBe(201)
     const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
-    expect(line).toMatchObject({ event: 'auth.register', outcome: 'success', actor_user_id: res.body.id })
+    expect(line).toMatchObject({
+      event: 'auth.register',
+      outcome: 'success',
+      actor_user_id: res.body.id,
+    })
     logSpy.mockRestore()
   })
 
@@ -123,9 +127,11 @@ describe('auth routes', () => {
     const app = createApp()
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await request(app)
-      .post('/api/auth/register')
-      .send({ email: 'jti-register@scpay.test', password: 'Sup3rSecret!', full_name: 'Jti Register' })
+    await request(app).post('/api/auth/register').send({
+      email: 'jti-register@scpay.test',
+      password: 'Sup3rSecret!',
+      full_name: 'Jti Register',
+    })
 
     const line = JSON.parse(logSpy.mock.calls[0]?.[0] as string)
     expect(typeof line.jti).toBe('string')
@@ -153,9 +159,11 @@ describe('auth routes', () => {
   it('logs auth.logout with the same field set as other security events', async () => {
     const app = buildAppWithProtectedTestRoute()
     const agent = request.agent(app)
-    await agent
-      .post('/api/auth/register')
-      .send({ email: 'logoutfields@scpay.test', password: 'Sup3rSecret!', full_name: 'Logout Fields' })
+    await agent.post('/api/auth/register').send({
+      email: 'logoutfields@scpay.test',
+      password: 'Sup3rSecret!',
+      full_name: 'Logout Fields',
+    })
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     await agent.post('/api/auth/logout')
