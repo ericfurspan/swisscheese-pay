@@ -67,16 +67,18 @@ describe('profile routes', () => {
     expect(bob.full_name).toBe('Bob Brown')
   })
 
-  it('lets a customer set their own role via the request body (mass assignment) -- tightened at fix/phase-2-mass-assignment', async () => {
+  it('ignores a role field in the request body (mass assignment fixed)', async () => {
     const agent = await loginAsAlice()
 
-    const res = await agent.patch('/api/profile').send({ full_name: 'Alice Anderson', role: 'admin' })
+    const res = await agent.patch('/api/profile').send({ full_name: 'Alice Updated', role: 'admin' })
     expect(res.status).toBe(200)
 
-    const alice = getDb().prepare('SELECT role FROM users WHERE email = ?').get('alice@scpay.test') as {
+    const alice = getDb().prepare('SELECT role, full_name FROM users WHERE email = ?').get('alice@scpay.test') as {
       role: string
+      full_name: string
     }
-    expect(alice.role).toBe('admin')
+    expect(alice.role).toBe('customer')
+    expect(alice.full_name).toBe('Alice Updated')
   })
 
   it('treats a validly-signed token for a since-deleted user as unauthenticated', async () => {
@@ -114,14 +116,14 @@ describe('profile routes', () => {
     logSpy.mockRestore()
   })
 
-  it('-- vulnerable state, tightened at fix/phase-2-mass-assignment -- logs role in changed_fields when a role field is smuggled in', async () => {
+  it('logs profile.update with only full_name in changed_fields even if role is smuggled in', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const agent = await loginAsAlice()
 
     await agent.patch('/api/profile').send({ full_name: 'Alice Updated', role: 'admin' })
 
     const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'profile.update')
-    expect(line?.changed_fields).toEqual(['full_name', 'role'])
+    expect(line?.changed_fields).toEqual(['full_name'])
     logSpy.mockRestore()
   })
 })
