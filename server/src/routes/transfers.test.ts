@@ -1,7 +1,7 @@
 process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../app.js'
 import { getDb } from '../db/connection.js'
 import { resetSchema } from '../db/schema.js'
@@ -128,5 +128,19 @@ describe('transfers routes', () => {
     const succeeded = responses.filter((r) => r.status === 201)
     expect(succeeded.length).toBeGreaterThan(1)
     expect(balanceOf('CHK-1001')).toBeLessThan(0)
+  })
+
+  it('logs balance_after_cents and idempotency_key on transfer.completed', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent
+      .post('/api/transfers')
+      .set('Idempotency-Key', 'test-key-1')
+      .send({ from_account_id: accountId('CHK-1001'), to_account_id: accountId('CHK-2001'), amount_cents: 1_000 })
+
+    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'transfer.completed')
+    expect(line).toMatchObject({ balance_after_cents: 100_000 - 1_000, idempotency_key: 'test-key-1' })
+    logSpy.mockRestore()
   })
 })

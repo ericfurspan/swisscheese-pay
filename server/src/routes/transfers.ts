@@ -70,7 +70,11 @@ transfersRouter.post(
       outcome: 'success',
       request_id: req.id,
       ip: req.ip,
-      detail: { transfer_id: result.transferId },
+      detail: {
+        transfer_id: result.transferId,
+        balance_after_cents: result.balanceAfterCents,
+        idempotency_key: idempotencyKey ?? null,
+      },
     })
     res.status(201).json({ id: result.transferId })
   }),
