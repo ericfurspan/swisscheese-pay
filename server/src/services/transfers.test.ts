@@ -33,11 +33,11 @@ function balanceOf(db: Database.Database, accountId: number): number {
 }
 
 describe('transfer', () => {
-  it('moves money between accounts and records a completed transfer', () => {
+  it('moves money between accounts and records a completed transfer', async () => {
     const db = setup()
-    const result = transfer(db, { fromId: 1, toId: 2, amountCents: 1_000, uid: 1 })
+    const result = await transfer(db, { fromId: 1, toId: 2, amountCents: 1_000, uid: 1 })
 
-    expect(result).toMatchObject({ ok: true })
+    expect(result).toMatchObject({ ok: true, balanceAfterCents: 9_000 })
     expect(balanceOf(db, 1)).toBe(9_000)
     expect(balanceOf(db, 2)).toBe(6_000)
 
@@ -45,49 +45,78 @@ describe('transfer', () => {
     expect(row).toMatchObject({ status: 'completed', amount_cents: 1_000 })
   })
 
-  it('rejects a transfer from an account the caller does not own, balances unchanged', () => {
+  it('rejects a transfer from an account the caller does not own, balances unchanged', async () => {
     const db = setup()
-    const result = transfer(db, { fromId: 1, toId: 2, amountCents: 1_000, uid: 2 })
+    const result = await transfer(db, { fromId: 1, toId: 2, amountCents: 1_000, uid: 2 })
 
     expect(result).toEqual({ ok: false, reason: 'not_owner' })
     expect(balanceOf(db, 1)).toBe(10_000)
     expect(balanceOf(db, 2)).toBe(5_000)
   })
 
-  it('rejects a zero or negative amount', () => {
+  it('rejects a zero or negative amount', async () => {
     const db = setup()
-    expect(transfer(db, { fromId: 1, toId: 2, amountCents: 0, uid: 1 })).toEqual({
+    expect(await transfer(db, { fromId: 1, toId: 2, amountCents: 0, uid: 1 })).toEqual({
       ok: false,
       reason: 'invalid_amount',
     })
-    expect(transfer(db, { fromId: 1, toId: 2, amountCents: -500, uid: 1 })).toEqual({
+    expect(await transfer(db, { fromId: 1, toId: 2, amountCents: -500, uid: 1 })).toEqual({
       ok: false,
       reason: 'invalid_amount',
     })
   })
 
-  it('rejects an overdraft, leaving balances unchanged (atomic guard)', () => {
+  it('rejects an overdraft, leaving balances unchanged (single request)', async () => {
     const db = setup()
-    const result = transfer(db, { fromId: 1, toId: 2, amountCents: 999_999, uid: 1 })
+    const result = await transfer(db, { fromId: 1, toId: 2, amountCents: 999_999, uid: 1 })
 
     expect(result).toEqual({ ok: false, reason: 'insufficient_funds' })
     expect(balanceOf(db, 1)).toBe(10_000)
     expect(balanceOf(db, 2)).toBe(5_000)
   })
 
-  it('rejects a transfer to a nonexistent account, leaving the source balance unchanged', () => {
+  it('rejects a transfer to a nonexistent account, leaving the source balance unchanged', async () => {
     const db = setup()
-    const result = transfer(db, { fromId: 1, toId: 999, amountCents: 1_000, uid: 1 })
+    const result = await transfer(db, { fromId: 1, toId: 999, amountCents: 1_000, uid: 1 })
 
     expect(result).toEqual({ ok: false, reason: 'invalid_destination' })
     expect(balanceOf(db, 1)).toBe(10_000)
   })
 
-  it('rejects a transfer to the same account', () => {
+  it('rejects a transfer to the same account', async () => {
     const db = setup()
-    const result = transfer(db, { fromId: 1, toId: 1, amountCents: 1_000, uid: 1 })
+    const result = await transfer(db, { fromId: 1, toId: 1, amountCents: 1_000, uid: 1 })
 
     expect(result).toEqual({ ok: false, reason: 'invalid_destination' })
     expect(balanceOf(db, 1)).toBe(10_000)
+  })
+
+  it('-- vulnerable state, tightened at fix/phase-3-concurrency -- lets concurrent transfers overdraw past a single balance check', async () => {
+    const db = setup()
+    // Alice has 10,000 cents. Three concurrent transfers of 6,000 each
+    // individually look fundable (10,000 >= 6,000) at the pre-await read,
+    // but only one can actually be honored.
+    const results = await Promise.all([
+      transfer(db, { fromId: 1, toId: 2, amountCents: 6_000, uid: 1 }),
+      transfer(db, { fromId: 1, toId: 2, amountCents: 6_000, uid: 1 }),
+      transfer(db, { fromId: 1, toId: 2, amountCents: 6_000, uid: 1 }),
+    ])
+
+    const succeeded = results.filter((r) => r.ok)
+    expect(succeeded.length).toBeGreaterThan(1)
+    expect(balanceOf(db, 1)).toBeLessThan(0)
+  })
+
+  it('-- vulnerable state, tightened at fix/phase-3-concurrency -- lets a replayed idempotency key execute twice concurrently', async () => {
+    const db = setup()
+    const key = 'race-key-1'
+    const results = await Promise.all([
+      transfer(db, { fromId: 1, toId: 2, amountCents: 100, uid: 1, idempotencyKey: key }),
+      transfer(db, { fromId: 1, toId: 2, amountCents: 100, uid: 1, idempotencyKey: key }),
+    ])
+
+    const transferIds = new Set(results.filter((r) => r.ok).map((r) => (r as { transferId: number }).transferId))
+    expect(transferIds.size).toBeGreaterThan(1)
+    expect(balanceOf(db, 1)).toBe(10_000 - 200)
   })
 })

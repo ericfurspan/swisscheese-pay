@@ -34,6 +34,7 @@ CREATE TABLE transfers (
   to_account_id INTEGER NOT NULL REFERENCES accounts(id),
   amount_cents INTEGER NOT NULL,     -- positive
   status TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('pending','completed','failed')),
+  idempotency_key TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE payment_links (

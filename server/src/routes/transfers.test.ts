@@ -114,4 +114,19 @@ describe('transfers routes', () => {
     expect(balanceOf('CHK-1001')).toBe(100_000)
     expect(balanceOf('CHK-2001')).toBe(25_000)
   })
+
+  it('-- vulnerable state, tightened at fix/phase-3-concurrency -- lets concurrent transfers overdraw', async () => {
+    const agent = await loginAsAlice()
+    const fromId = accountId('CHK-1001')
+    const toId = accountId('CHK-2001')
+
+    const responses = await Promise.all([
+      agent.post('/api/transfers').send({ from_account_id: fromId, to_account_id: toId, amount_cents: 60_000 }),
+      agent.post('/api/transfers').send({ from_account_id: fromId, to_account_id: toId, amount_cents: 60_000 }),
+    ])
+
+    const succeeded = responses.filter((r) => r.status === 201)
+    expect(succeeded.length).toBeGreaterThan(1)
+    expect(balanceOf('CHK-1001')).toBeLessThan(0)
+  })
 })

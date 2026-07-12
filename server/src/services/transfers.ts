@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
 import { isAccountOwnedByUser } from './accounts.js'
+import { mockFraudCheck } from './fraudCheck.js'
 
 export type TransferFailureReason =
   | 'not_owner'
@@ -7,20 +8,30 @@ export type TransferFailureReason =
   | 'invalid_destination'
   | 'insufficient_funds'
 
-export type TransferResult = { ok: true; transferId: number } | { ok: false; reason: TransferFailureReason }
+export type TransferResult =
+  | { ok: true; transferId: number; balanceAfterCents: number }
+  | { ok: false; reason: TransferFailureReason }
 
 export interface TransferInput {
   fromId: number
   toId: number
   amountCents: number
   uid: number
+  idempotencyKey?: string
 }
 
-class InsufficientFundsError extends Error {}
 class InvalidDestinationError extends Error {}
 
-export function transfer(db: Database.Database, input: TransferInput): TransferResult {
-  const { fromId, toId, amountCents, uid } = input
+interface BalanceRow {
+  balance_cents: number
+}
+
+interface TransferIdRow {
+  id: number
+}
+
+export async function transfer(db: Database.Database, input: TransferInput): Promise<TransferResult> {
+  const { fromId, toId, amountCents, uid, idempotencyKey } = input
 
   if (!isAccountOwnedByUser(db, fromId, uid)) {
     return { ok: false, reason: 'not_owner' }
@@ -38,37 +49,63 @@ export function transfer(db: Database.Database, input: TransferInput): TransferR
     return { ok: false, reason: 'invalid_destination' }
   }
 
-  const debitStmt = db.prepare(
-    'UPDATE accounts SET balance_cents = balance_cents - ? WHERE id = ? AND balance_cents >= ?',
-  )
+  // vuln/phase-3-concurrency: a separate read decides sufficiency instead of
+  // the write itself -- see spec §3.1. This is the bug.
+  const balanceRow = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId) as
+    | BalanceRow
+    | undefined
+  if (!balanceRow || balanceRow.balance_cents < amountCents) {
+    return { ok: false, reason: 'insufficient_funds' }
+  }
+
+  // vuln/phase-3-concurrency: same stale-read-then-write shape, applied to
+  // the idempotency key instead of the balance -- see spec §3.2.
+  if (idempotencyKey !== undefined) {
+    const existing = db
+      .prepare('SELECT id FROM transfers WHERE idempotency_key = ?')
+      .get(idempotencyKey) as TransferIdRow | undefined
+    if (existing) {
+      const balanceAfterCents = (
+        db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId) as BalanceRow
+      ).balance_cents
+      return { ok: true, transferId: existing.id, balanceAfterCents }
+    }
+  }
+
+  // The real await gap: two concurrent calls can both reach this point
+  // having already passed both checks above.
+  await mockFraudCheck()
+
+  const debitStmt = db.prepare('UPDATE accounts SET balance_cents = balance_cents - ? WHERE id = ?')
   const creditStmt = db.prepare('UPDATE accounts SET balance_cents = balance_cents + ? WHERE id = ?')
   const insertTransfer = db.prepare(
-    "INSERT INTO transfers (from_account_id, to_account_id, amount_cents, status) VALUES (?, ?, ?, 'completed')",
+    "INSERT INTO transfers (from_account_id, to_account_id, amount_cents, status, idempotency_key) VALUES (?, ?, ?, 'completed', ?)",
   )
   const insertTransaction = db.prepare(
     'INSERT INTO transactions (account_id, counterparty, memo, amount_cents) VALUES (?, ?, ?, ?)',
   )
 
   const run = db.transaction(() => {
-    const debited = debitStmt.run(amountCents, fromId, amountCents)
-    if (debited.changes === 0) throw new InsufficientFundsError()
+    // vuln/phase-3-concurrency: unconditional -- no `WHERE balance_cents >= ?`
+    // guard, because the check above already (incorrectly) decided this.
+    debitStmt.run(amountCents, fromId)
 
-    // The credit must actually land on a real row -- otherwise a transfer to a
-    // nonexistent account would debit the source, still insert a 'completed'
-    // transfer row, and the money would simply vanish.
     const credited = creditStmt.run(amountCents, toId)
     if (credited.changes === 0) throw new InvalidDestinationError()
 
-    const { lastInsertRowid } = insertTransfer.run(fromId, toId, amountCents)
+    const { lastInsertRowid } = insertTransfer.run(fromId, toId, amountCents, idempotencyKey ?? null)
     insertTransaction.run(fromId, 'Transfer', 'Transfer out', -amountCents)
     insertTransaction.run(toId, 'Transfer', 'Transfer in', amountCents)
-    return Number(lastInsertRowid)
+    const balanceAfterCents = (
+      db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId) as BalanceRow
+    ).balance_cents
+    return { transferId: Number(lastInsertRowid), balanceAfterCents }
   })
 
   try {
-    return { ok: true, transferId: run() }
+    const result = run()
+    return { ok: true, transferId: result.transferId, balanceAfterCents: result.balanceAfterCents }
   } catch (err) {
-    if (err instanceof InsufficientFundsError) return { ok: false, reason: 'insufficient_funds' }
     if (err instanceof InvalidDestinationError) return { ok: false, reason: 'invalid_destination' }
     throw err
   }
