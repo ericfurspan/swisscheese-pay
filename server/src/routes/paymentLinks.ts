@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Router } from 'express'
 import { getDb } from '../db/connection.js'
+import { logSecurity } from '../log/security.js'
 import { isAccountOwnedByUser } from '../services/accounts.js'
 import { asyncHandler } from '../middleware/asyncHandler.js'
 import { requireAuth } from '../middleware/requireAuth.js'
@@ -102,6 +103,16 @@ paymentLinksRouter.post(
     const toId = typeof toIdOverride === 'number' ? toIdOverride : link.account_id
 
     const result = await transfer(db, { fromId, toId, amountCents: link.amount_cents, uid: req.user!.uid })
+
+    logSecurity({
+      event: 'payment_link.paid',
+      actor_user_id: req.user!.uid,
+      target: `payment_link:${link.id}`,
+      outcome: result.ok ? 'success' : 'failure',
+      request_id: req.id,
+      ip: req.ip,
+      detail: { token: req.params.token, link_account_id: link.account_id, actual_to_account_id: toId },
+    })
 
     if (!result.ok) {
       const status = result.reason === 'not_owner' ? 404 : result.reason === 'insufficient_funds' ? 422 : 400

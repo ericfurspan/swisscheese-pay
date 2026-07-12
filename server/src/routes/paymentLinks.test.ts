@@ -1,7 +1,7 @@
 process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../app.js'
 import { getDb } from '../db/connection.js'
 import { resetSchema } from '../db/schema.js'
@@ -136,4 +136,28 @@ describe('payment links routes', () => {
       expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore)
     },
   )
+
+  it('logs payment_link.paid with the true link_account_id and what was actually credited', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const bobAgent = await loginAs('bob@scpay.test')
+    const created = await bobAgent
+      .post('/api/payment-links')
+      .send({ amount_cents: 5_000, account_id: accountId('CHK-2001') })
+
+    const aliceAgent = await loginAs('alice@scpay.test')
+    await aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send({
+      from_account_id: accountId('CHK-1001'),
+      to_account_id: accountId('SAV-1002'),
+    })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'payment_link.paid')
+    expect(line).toMatchObject({
+      outcome: 'success',
+      link_account_id: accountId('CHK-2001'),
+      actual_to_account_id: accountId('SAV-1002'),
+    })
+    logSpy.mockRestore()
+  })
 })

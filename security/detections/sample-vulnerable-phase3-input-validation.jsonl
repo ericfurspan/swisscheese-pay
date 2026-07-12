@@ -3,3 +3,7 @@
 {"ts":"2026-07-12T15:46:16.976Z","event":"auth.login.success","actor_user_id":2,"outcome":"success","ip":"127.0.0.1","request_id":"003f85b8-4dff-4017-b5ac-eb29ebf03800"}
 {"from_account_id":1,"to_account_id":3,"amount_cents":-50000,"ts":"2026-07-12T15:46:17.020Z","event":"transfer.initiated","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"d7d4700f-5f40-4519-bf3f-88a987fadd91"}
 {"transfer_id":1,"balance_after_cents":150000,"idempotency_key":null,"amount_cents":-50000,"ts":"2026-07-12T15:46:17.071Z","event":"transfer.completed","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"d7d4700f-5f40-4519-bf3f-88a987fadd91"}
+{"ts":"2026-07-12T15:49:47.997Z","event":"auth.login.success","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"d963ad35-40bb-49f9-8978-cc7a2776ae0d"}
+{"ts":"2026-07-12T15:49:48.275Z","event":"auth.login.success","actor_user_id":2,"outcome":"success","ip":"127.0.0.1","request_id":"8691bf26-fb8e-45dd-81ae-e8303e76b027"}
+{"ts":"2026-07-12T15:49:48.568Z","event":"auth.login.success","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"df48356a-46c8-4eba-b138-42030406b4c3"}
+{"token":"c1b8cc8f3867ff8576b6ce2c5db65161","link_account_id":3,"actual_to_account_id":2,"ts":"2026-07-12T15:49:48.648Z","event":"payment_link.paid","actor_user_id":1,"target":"payment_link:1","outcome":"success","ip":"127.0.0.1","request_id":"3d55eeaa-14c8-49b2-95c8-d763c9ffb2a1"}
