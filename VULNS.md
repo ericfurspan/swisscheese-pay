@@ -110,3 +110,94 @@ a log sample captured by running the exploit script against the vulnerable branc
 (post-logging, pre-fix): the rule isolates exactly the two cross-owner grants and
 nothing else. Re-verified live against the fixed state: the same exploit run now 404s
 on the cross-owner IDs, and the rule finds an empty set.
+
+## Mass assignment → privilege escalation → admin data over-exposure
+
+**OWASP / CWE:** A01 Broken Access Control / A04 Insecure Design · CWE-915 (Improperly
+Controlled Modification of Dynamically-Determined Object Attributes) for the
+mass-assignment half; A01 / CWE-213 (Exposure of Sensitive Information Due to
+Incompatible Policies) for the data-exposure half.
+**Phase introduced:** Phase 2.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-2-mass-assignment`,
+both vulnerable pieces are live as of tag `vuln/phase-2-mass-assignment` (commit
+`2cf30d2`) and both are fixed at tag `fix/phase-2-mass-assignment` (commit `e259c09`).
+`main` receives only the fixed state via `git merge --no-ff`; both tags and the branch
+are kept locally.
+
+### Exploit
+[`security/exploits/phase-2-mass-assignment.sh`](security/exploits/phase-2-mass-assignment.sh)
+chains both halves as a single attacker session, logged in only as the seeded customer
+alice: (1) `PATCH /api/profile` with an unexpected `role: "admin"` field, silently
+accepted; (2) calling the new admin endpoint with alice's *original* session still
+403s, because `role` is baked into the session JWT at login and never re-checked
+against the DB; (3) logging out and back in refreshes the token with the now-escalated
+role; (4) `GET /api/admin/users` now returns `200` with every seeded user's raw row,
+including `password_hash` and unmasked `ssn` — an unprivileged customer, with no
+special access beyond her own login, dumps the full user table's sensitive fields.
+
+### Root cause
+Two independent bugs chained together:
+
+**Part 1 — mass assignment (`server/src/routes/profile.ts`, commit `c4d0ae7`).** The
+`PATCH /api/profile` handler was widened to destructure and write a `role` field from
+the request body, with no check that the caller is already an admin:
+
+```ts
+// vulnerable state
+const { full_name: fullName, role } = req.body ?? {}
+// ...
+role !== undefined
+  ? db.prepare('UPDATE users SET full_name = ?, role = ? WHERE id = ?').run(fullName, role, req.user!.uid)
+  : db.prepare('UPDATE users SET full_name = ? WHERE id = ?').run(fullName, req.user!.uid)
+```
+
+The bug is the missing *authorization* check on which fields a self-service update may
+touch, not a missing input-validation check — `role` still only accepts DB-enforced
+values.
+
+**Part 2 — excessive data exposure (`server/src/routes/admin.ts`, commit
+`2cf30d2`).** The new `GET /api/admin/users` endpoint's authorization gate
+(`requireAdmin`) is correct and was never the bug; its first implementation instead
+returned unfiltered raw rows:
+
+```ts
+// vulnerable state
+const rows = db.prepare('SELECT * FROM users ORDER BY id').all()
+res.status(200).json(rows)
+```
+
+— in contrast to every other endpoint in the codebase, which selects an explicit
+column list and never returns `password_hash` or an unmasked `ssn`.
+
+### Fix
+Commit `e259c09` reverts both halves. `PATCH /api/profile` (`server/src/routes/profile.ts`)
+drops `role` from the accepted fields entirely — the handler only ever destructures and
+writes `full_name` again. `GET /api/admin/users` (`server/src/routes/admin.ts`) switches
+to a curated column list (`id, email, full_name, ssn, role, created_at`) and masks `ssn`
+through a new shared `maskSsn` helper
+([`server/src/services/users.ts`](server/src/services/users.ts)), the same masking
+`profile.ts`'s own `GET` handler uses, so the two endpoints can't drift out of sync on
+how PII is redacted. `password_hash` is never selected at all.
+
+### Detection
+Two rules, both validated against
+[`security/detections/sample-vulnerable-phase2.jsonl`](security/detections/sample-vulnerable-phase2.jsonl),
+a log sample captured by running the exploit script against the vulnerable branch state
+plus one additional, unescalated call from the legitimate seeded admin (a negative
+check):
+
+- [`security/detections/profile-role-change.sh`](security/detections/profile-role-change.sh)
+  (Rule 1) flags any `profile.update` log line whose `changed_fields` includes `"role"`.
+  No feature in this app legitimately lets a customer change their own role, so the
+  field's mere presence is the complete signal. Against the sample it isolates exactly
+  alice's self-escalation line.
+- [`security/detections/admin-post-escalation.sh`](security/detections/admin-post-escalation.sh)
+  (Rule 2) is a correlation rule: it flags an `admin.action` event where the same
+  `actor_user_id` has an earlier `profile.update` with `role` in `changed_fields`. This
+  catches what Rule 1 alone can't — that the escalation was actually *used* — without
+  false-positiving on the legitimate seeded admin's routine listing call, which the
+  sample also includes and the rule correctly excludes.
+
+Re-verified live against the fixed state: the same exploit run's escalation `PATCH` no
+longer changes alice's role, the post-refresh admin call still `403`s, and both rules
+return an empty set against a fresh capture.

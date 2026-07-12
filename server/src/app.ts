@@ -5,6 +5,7 @@ import express from 'express'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestId } from './middleware/requestId.js'
 import { accountsRouter } from './routes/accounts.js'
+import { adminRouter } from './routes/admin.js'
 import { authRouter } from './routes/auth.js'
 import { paymentLinksRouter } from './routes/paymentLinks.js'
 import { profileRouter } from './routes/profile.js'
@@ -32,6 +33,7 @@ export function createApp() {
   app.use('/api/transfers', transfersRouter)
   app.use('/api/payment-links', paymentLinksRouter)
   app.use('/api/profile', profileRouter)
+  app.use('/api/admin', adminRouter)
 
   // No blanket /api 404 handler here -- it would run before (and shadow) any
   // route a caller mounts on the returned app afterward, which auth.test.ts's

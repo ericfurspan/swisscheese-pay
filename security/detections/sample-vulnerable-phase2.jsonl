@@ -1,0 +1,10 @@
+SwissCheese Pay listening on http://127.0.0.1:8082
+{"ts":"2026-07-12T03:48:54.084Z","event":"auth.login.success","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"93d41d58-9b99-48c0-ba91-78816023ffe3"}
+{"changed_fields":["full_name","role"],"ts":"2026-07-12T03:48:54.096Z","event":"profile.update","actor_user_id":1,"target":"user:1","outcome":"success","ip":"127.0.0.1","request_id":"fb84cd99-9762-440a-8e4e-64f20a970796"}
+{"ts":"2026-07-12T03:48:54.104Z","event":"authz.deny","actor_user_id":1,"target":"admin:users:list","outcome":"denied","ip":"127.0.0.1","request_id":"0738bb53-acae-40cc-9eb3-aa63415c7be9"}
+{"ts":"2026-07-12T03:48:54.113Z","event":"auth.logout","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"d8a91c63-5086-40f2-8e38-5de239fe8f2b"}
+{"ts":"2026-07-12T03:48:54.380Z","event":"auth.login.success","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"65f64acc-0b65-4611-82bc-97089e4a5bbd"}
+{"action":"list_users","row_count":3,"ts":"2026-07-12T03:48:54.391Z","event":"admin.action","actor_user_id":1,"target":"admin:users:list","outcome":"success","ip":"127.0.0.1","request_id":"42f9fc4a-f6ee-40ae-a7ce-e92d9352530c"}
+{"ts":"2026-07-12T03:49:00.013Z","event":"auth.login.success","actor_user_id":3,"outcome":"success","ip":"127.0.0.1","request_id":"d65da0e3-0a60-434c-84bc-589a973beee4"}
+{"action":"list_users","row_count":3,"ts":"2026-07-12T03:49:00.023Z","event":"admin.action","actor_user_id":3,"target":"admin:users:list","outcome":"success","ip":"127.0.0.1","request_id":"28009dd5-186f-40d8-8bdc-89041583816c"}
+11:49:04 PM [tsx] Previous process hasn't exited yet. Force killing...

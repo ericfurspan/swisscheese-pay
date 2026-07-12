@@ -1,7 +1,7 @@
 process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { signToken } from '../auth/token.js'
 import { createApp } from '../app.js'
 import { getDb } from '../db/connection.js'
@@ -67,6 +67,20 @@ describe('profile routes', () => {
     expect(bob.full_name).toBe('Bob Brown')
   })
 
+  it('ignores a role field in the request body (mass assignment fixed)', async () => {
+    const agent = await loginAsAlice()
+
+    const res = await agent.patch('/api/profile').send({ full_name: 'Alice Updated', role: 'admin' })
+    expect(res.status).toBe(200)
+
+    const alice = getDb().prepare('SELECT role, full_name FROM users WHERE email = ?').get('alice@scpay.test') as {
+      role: string
+      full_name: string
+    }
+    expect(alice.role).toBe('customer')
+    expect(alice.full_name).toBe('Alice Updated')
+  })
+
   it('treats a validly-signed token for a since-deleted user as unauthenticated', async () => {
     // Simulates a session that outlives its user row -- e.g. the DB reseeds
     // (as it does on every container boot) while a still-unexpired cookie
@@ -89,5 +103,27 @@ describe('profile routes', () => {
       .send({ full_name: 'Nobody' })
 
     expect(res.status).toBe(401)
+  })
+
+  it('logs profile.update with changed_fields on a name-only update (state-independent)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent.patch('/api/profile').send({ full_name: 'Alice Updated' })
+
+    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'profile.update')
+    expect(line).toMatchObject({ event: 'profile.update', outcome: 'success', changed_fields: ['full_name'] })
+    logSpy.mockRestore()
+  })
+
+  it('logs profile.update with only full_name in changed_fields even if role is smuggled in', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent.patch('/api/profile').send({ full_name: 'Alice Updated', role: 'admin' })
+
+    const line = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string)).find((l) => l.event === 'profile.update')
+    expect(line?.changed_fields).toEqual(['full_name'])
+    logSpy.mockRestore()
   })
 })
