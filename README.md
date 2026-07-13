@@ -15,14 +15,14 @@ task-board or CRM clone can't.
 
 ## Status
 
-| Phase | Vulnerability class                                                                | Status           |
-| ----- | ---------------------------------------------------------------------------------- | ---------------- |
-| 0     | Secure scaffold                                                                    | Done             |
-| 1     | Broken object-level access control (BOLA/IDOR)                                     | Done             |
-| 2     | Mass assignment / excessive data exposure                                          | Done             |
-| 3     | Money-movement business logic (races, replay, negative-amount, tampered recipient) | Done             |
-| 4     | JWT attacks (weak secret, forged tokens)                                           | Done             |
-| 5     | Standard web-vuln breadth (stored XSS, CSRF, open redirect, clickjacking, CORS)    | Planned, post-v1 |
+| Phase | Vulnerability class                                                                | Status |
+| ----- | ---------------------------------------------------------------------------------- | ------ |
+| 0     | Secure scaffold                                                                    | Done   |
+| 1     | Broken object-level access control (BOLA/IDOR)                                     | Done   |
+| 2     | Mass assignment / excessive data exposure                                          | Done   |
+| 3     | Money-movement business logic (races, replay, negative-amount, tampered recipient) | Done   |
+| 4     | JWT attacks (weak secret, forged tokens)                                           | Done   |
+| 5     | Standard web-vuln breadth (stored XSS, CSRF, CORS misconfiguration)                | Done   |
 
 Every phase is taken through the four-part loop below and documented in
 [`VULNS.md`](./VULNS.md).
@@ -58,9 +58,11 @@ generic OWASP-Top-10 web vulns are kept for breadth but aren't the point:
 - **Excessive data exposure / mass assignment.** Over-returned sensitive fields;
   `role`/`balance` writable via unexpected request fields.
 
-Standard web-vuln coverage (stored XSS, CSRF, open redirect, clickjacking, CORS
-misconfiguration, client-side-only authz) is planned for Phase 5, post-v1 — not yet
-built.
+Standard web-vuln coverage — stored XSS, CSRF, and CORS misconfiguration — is also
+covered (Phase 5), for breadth alongside the four differentiators above. Open redirect,
+clickjacking, and client-side-only authz were scoped out as weaker fits for this app's
+specific surface (see `docs/superpowers/specs/2026-07-13-phase-5-owasp-breadth-design.md`
+for the reasoning).
 
 ## Architecture
 
@@ -116,7 +118,7 @@ make down
 git checkout main
 ```
 
-The other five vulnerabilities follow the same checkout / `make up` / run / `make down`
+The other eight vulnerabilities follow the same checkout / `make up` / run / `make down`
 pattern:
 
 | Vulnerability                            | Vulnerable tag                    | Fixed tag                        | Exploit script                                    |
@@ -127,6 +129,9 @@ pattern:
 | Negative-amount transfer                 | `vuln/phase-3-negative-amount`    | `fix/phase-3-negative-amount`    | `security/exploits/phase-3-negative-amount.sh`    |
 | Tampered payment-link recipient          | `vuln/phase-3-tampered-recipient` | `fix/phase-3-tampered-recipient` | `security/exploits/phase-3-tampered-recipient.sh` |
 | JWT weak-secret cracking                 | `vuln/phase-4-jwt`                | `fix/phase-4-jwt`                | `security/exploits/phase-4-jwt.mjs`               |
+| Stored XSS via payment-link notes        | `vuln/phase-5-xss`                | `fix/phase-5-xss`                | `security/exploits/phase-5-xss.mjs`               |
+| CSRF via body-parser leniency            | `vuln/phase-5-csrf`               | `fix/phase-5-csrf`               | `security/exploits/phase-5-csrf.mjs`              |
+| CORS misconfiguration                    | `vuln/phase-5-cors`               | `fix/phase-5-cors`               | `security/exploits/phase-5-cors.mjs`              |
 
 Each script's expected output and the matching detection rule are documented per-vuln
 in [`VULNS.md`](./VULNS.md).
