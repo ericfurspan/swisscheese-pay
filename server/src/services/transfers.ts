@@ -3,7 +3,11 @@ import { isAccountOwnedByUser } from './accounts.js'
 import { mockFraudCheck } from './fraudCheck.js'
 
 export type TransferFailureReason =
-  'not_owner' | 'invalid_amount' | 'invalid_destination' | 'insufficient_funds'
+  | 'not_owner'
+  | 'invalid_amount'
+  | 'invalid_destination'
+  | 'insufficient_funds'
+  | 'idempotency_conflict'
 
 export type TransferResult =
   | { ok: true; transferId: number; balanceAfterCents: number }
@@ -15,24 +19,42 @@ export interface TransferInput {
   amountCents: number
   uid: number
   idempotencyKey?: string
+  paymentLinkId?: number
 }
 
 class InsufficientFundsError extends Error {}
 class InvalidDestinationError extends Error {}
+class IdempotencyConflictError extends Error {}
 
 interface BalanceRow {
   balance_cents: number
 }
 
-interface TransferIdRow {
+interface ExistingTransferRow {
   id: number
+  from_account_id: number
+  to_account_id: number
+  amount_cents: number
+}
+
+function matchesRequest(
+  existing: ExistingTransferRow,
+  fromId: number,
+  toId: number,
+  amountCents: number,
+): boolean {
+  return (
+    existing.from_account_id === fromId &&
+    existing.to_account_id === toId &&
+    existing.amount_cents === amountCents
+  )
 }
 
 export async function transfer(
   db: Database.Database,
   input: TransferInput,
 ): Promise<TransferResult> {
-  const { fromId, toId, amountCents, uid, idempotencyKey } = input
+  const { fromId, toId, amountCents, uid, idempotencyKey, paymentLinkId } = input
 
   if (!isAccountOwnedByUser(db, fromId, uid)) {
     return { ok: false, reason: 'not_owner' }
@@ -59,21 +81,40 @@ export async function transfer(
     'UPDATE accounts SET balance_cents = balance_cents + ? WHERE id = ?',
   )
   const insertTransfer = db.prepare(
-    "INSERT INTO transfers (from_account_id, to_account_id, amount_cents, status, idempotency_key) VALUES (?, ?, ?, 'completed', ?)",
+    "INSERT INTO transfers (from_account_id, to_account_id, amount_cents, status, idempotency_key, payment_link_id) VALUES (?, ?, ?, 'completed', ?, ?)",
   )
   const insertTransaction = db.prepare(
     'INSERT INTO transactions (account_id, counterparty, memo, amount_cents) VALUES (?, ?, ?, ?)',
   )
   const balanceStmt = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?')
 
+  const findByIdempotencyKey = db.prepare(
+    'SELECT id, from_account_id, to_account_id, amount_cents FROM transfers WHERE idempotency_key = ?',
+  )
+  const findByPaymentLinkId = db.prepare(
+    'SELECT id, from_account_id, to_account_id, amount_cents FROM transfers WHERE payment_link_id = ?',
+  )
+
   const run = db.transaction(() => {
     if (idempotencyKey !== undefined) {
-      const existing = db
-        .prepare('SELECT id FROM transfers WHERE idempotency_key = ?')
-        .get(idempotencyKey) as TransferIdRow | undefined
+      const existing = findByIdempotencyKey.get(idempotencyKey) as ExistingTransferRow | undefined
       if (existing) {
-        const balanceAfterCents = (balanceStmt.get(fromId) as BalanceRow).balance_cents
-        return { transferId: existing.id, balanceAfterCents }
+        if (matchesRequest(existing, fromId, toId, amountCents)) {
+          const balanceAfterCents = (balanceStmt.get(fromId) as BalanceRow).balance_cents
+          return { transferId: existing.id, balanceAfterCents }
+        }
+        throw new IdempotencyConflictError()
+      }
+    }
+
+    if (paymentLinkId !== undefined) {
+      const existing = findByPaymentLinkId.get(paymentLinkId) as ExistingTransferRow | undefined
+      if (existing) {
+        if (matchesRequest(existing, fromId, toId, amountCents)) {
+          const balanceAfterCents = (balanceStmt.get(fromId) as BalanceRow).balance_cents
+          return { transferId: existing.id, balanceAfterCents }
+        }
+        throw new IdempotencyConflictError()
       }
     }
 
@@ -88,6 +129,7 @@ export async function transfer(
       toId,
       amountCents,
       idempotencyKey ?? null,
+      paymentLinkId ?? null,
     )
     insertTransaction.run(fromId, 'Transfer', 'Transfer out', -amountCents)
     insertTransaction.run(toId, 'Transfer', 'Transfer in', amountCents)
@@ -101,6 +143,8 @@ export async function transfer(
   } catch (err) {
     if (err instanceof InsufficientFundsError) return { ok: false, reason: 'insufficient_funds' }
     if (err instanceof InvalidDestinationError) return { ok: false, reason: 'invalid_destination' }
+    if (err instanceof IdempotencyConflictError)
+      return { ok: false, reason: 'idempotency_conflict' }
     throw err
   }
 }

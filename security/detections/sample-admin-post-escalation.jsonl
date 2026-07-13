@@ -1,0 +1,6 @@
+{"ts":"2026-07-12T10:00:00.000Z","event":"profile.update","actor_user_id":1,"target":"user:1","outcome":"success","changed_fields":["role"]}
+{"ts":"2026-07-12T10:00:00.000Z","event":"admin.action","actor_user_id":1,"target":"admin:users:list","outcome":"success"}
+{"ts":"2026-07-12T10:05:00.000Z","event":"admin.action","actor_user_id":2,"target":"admin:users:list","outcome":"success"}
+{"ts":"2026-07-12T10:05:00.000Z","event":"profile.update","actor_user_id":2,"target":"user:2","outcome":"success","changed_fields":["role"]}
+{"ts":"2026-07-12T10:10:00.000Z","event":"profile.update","actor_user_id":3,"target":"user:3","outcome":"success","changed_fields":["role"]}
+{"ts":"2026-07-12T10:15:00.000Z","event":"admin.action","actor_user_id":4,"target":"admin:users:list","outcome":"success"}

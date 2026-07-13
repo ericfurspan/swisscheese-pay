@@ -158,4 +158,64 @@ describe('payment links routes', () => {
     })
     logSpy.mockRestore()
   })
+
+  it('pays a link exactly once under concurrent attempts from different accounts', async () => {
+    const bobAgent = await loginAs('bob@scpay.test')
+    const created = await bobAgent
+      .post('/api/payment-links')
+      .send({ amount_cents: 1_000, account_id: accountId('CHK-2001') })
+    const bobBalanceBefore = balanceOf('CHK-2001')
+
+    const aliceAgent = await loginAs('alice@scpay.test')
+    const [r1, r2] = await Promise.all([
+      aliceAgent
+        .post(`/api/payment-links/${created.body.token}/pay`)
+        .send({ from_account_id: accountId('CHK-1001') }),
+      aliceAgent
+        .post(`/api/payment-links/${created.body.token}/pay`)
+        .send({ from_account_id: accountId('SAV-1002') }),
+    ])
+
+    const statuses = [r1.status, r2.status].sort()
+    expect(statuses).toEqual([201, 409])
+    expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore + 1_000) // credited exactly once
+  })
+
+  it('returns the same transfer id on a sequential retry (safe retry after a lost response)', async () => {
+    const bobAgent = await loginAs('bob@scpay.test')
+    const created = await bobAgent
+      .post('/api/payment-links')
+      .send({ amount_cents: 1_000, account_id: accountId('CHK-2001') })
+    const bobBalanceBefore = balanceOf('CHK-2001')
+
+    const aliceAgent = await loginAs('alice@scpay.test')
+    const body = { from_account_id: accountId('CHK-1001') }
+    const first = await aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send(body)
+    const second = await aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send(body)
+
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(201)
+    expect(second.body.id).toBe(first.body.id)
+    expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore + 1_000) // still only one credit
+  })
+
+  it('returns one shared transfer id under true concurrent exact-retry from the same source account', async () => {
+    const bobAgent = await loginAs('bob@scpay.test')
+    const created = await bobAgent
+      .post('/api/payment-links')
+      .send({ amount_cents: 1_000, account_id: accountId('CHK-2001') })
+    const bobBalanceBefore = balanceOf('CHK-2001')
+
+    const aliceAgent = await loginAs('alice@scpay.test')
+    const body = { from_account_id: accountId('CHK-1001') }
+    const [r1, r2] = await Promise.all([
+      aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send(body),
+      aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send(body),
+    ])
+
+    expect(r1.status).toBe(201)
+    expect(r2.status).toBe(201)
+    expect(r1.body.id).toBe(r2.body.id)
+    expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore + 1_000) // exactly one debit/credit
+  })
 })

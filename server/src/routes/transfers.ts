@@ -14,6 +14,7 @@ const FAILURE_STATUS: Record<TransferFailureReason, number> = {
   invalid_amount: 400,
   invalid_destination: 400,
   insufficient_funds: 422,
+  idempotency_conflict: 409,
 }
 
 const FAILURE_MESSAGE: Record<TransferFailureReason, string> = {
@@ -21,6 +22,7 @@ const FAILURE_MESSAGE: Record<TransferFailureReason, string> = {
   invalid_amount: 'amount_cents must be a positive integer',
   invalid_destination: 'Destination account not found',
   insufficient_funds: 'Insufficient funds',
+  idempotency_conflict: 'Idempotency-Key was already used for a different request',
 }
 
 transfersRouter.post(

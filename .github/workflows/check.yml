@@ -17,3 +17,33 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - name: Syntax-check exploit and detection scripts
+        run: |
+          set -euo pipefail
+          for f in security/exploits/*.sh security/detections/*.sh; do
+            bash -n "$f"
+          done
+          for f in security/exploits/*.mjs; do
+            node --check "$f"
+          done
+      - name: Replay detection fixtures
+        run: ./security/detections/run-fixtures.sh
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build
+      - run: docker compose up -d
+      - name: Wait for the app to respond
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8082/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "App did not become healthy in time" >&2
+          docker compose logs
+          exit 1
+      - name: Tear down
+        if: always()
+        run: docker compose down
