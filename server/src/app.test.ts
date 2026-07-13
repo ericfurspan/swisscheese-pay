@@ -42,4 +42,13 @@ describe('app', () => {
 
     expect(res.status).toBe(200)
   })
+
+  it('never sends Access-Control-* headers (CORS fix -- single-origin by design)', async () => {
+    const res = await request(createApp())
+      .get('/api/health')
+      .set('Origin', 'http://evil.scpay.test:9000')
+
+    expect(res.headers['access-control-allow-origin']).toBeUndefined()
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined()
+  })
 })
