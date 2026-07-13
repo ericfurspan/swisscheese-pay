@@ -218,4 +218,68 @@ describe('payment links routes', () => {
     expect(r1.body.id).toBe(r2.body.id)
     expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore + 1_000) // exactly one debit/credit
   })
+
+  it('logs payment_link.created with note_flagged: false for a benign note', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAs('alice@scpay.test')
+
+    await agent
+      .post('/api/payment-links')
+      .send({ amount_cents: 500, note: 'Lunch', account_id: accountId('CHK-1001') })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'payment_link.created')
+    expect(line).toMatchObject({ outcome: 'success', note_flagged: false })
+    logSpy.mockRestore()
+  })
+
+  it('logs payment_link.created with note_flagged: true for a suspicious note', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAs('alice@scpay.test')
+
+    await agent.post('/api/payment-links').send({
+      amount_cents: 500,
+      note: '<img src=x onerror="alert(1)">',
+      account_id: accountId('CHK-1001'),
+    })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'payment_link.created')
+    expect(line).toMatchObject({ outcome: 'success', note_flagged: true })
+    logSpy.mockRestore()
+  })
+
+  it('flags note_flagged: true case-insensitively', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAs('alice@scpay.test')
+
+    await agent.post('/api/payment-links').send({
+      amount_cents: 500,
+      note: '<IMG SRC=x ONERROR="alert(1)">',
+      account_id: accountId('CHK-1001'),
+    })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'payment_link.created')
+    expect(line).toMatchObject({ outcome: 'success', note_flagged: true })
+    logSpy.mockRestore()
+  })
+
+  it('logs payment_link.created with note_flagged: false when note is omitted', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAs('alice@scpay.test')
+
+    await agent
+      .post('/api/payment-links')
+      .send({ amount_cents: 500, account_id: accountId('CHK-1001') })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'payment_link.created')
+    expect(line).toMatchObject({ outcome: 'success', note_flagged: false })
+    logSpy.mockRestore()
+  })
 })
