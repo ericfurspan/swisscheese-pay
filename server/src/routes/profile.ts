@@ -30,6 +30,15 @@ profileRouter.get('/', (req, res) => {
     return
   }
 
+  logSecurity({
+    event: 'profile.read',
+    actor_user_id: req.user!.uid,
+    outcome: 'success',
+    request_id: req.id,
+    ip: req.ip,
+    detail: { origin: req.get('Origin') ?? null },
+  })
+
   res
     .status(200)
     .json({ id: row.id, email: row.email, full_name: row.full_name, ssn: maskSsn(row.ssn) })

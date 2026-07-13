@@ -13,6 +13,7 @@ export type SecurityEvent =
   | 'profile.update'
   | 'payment_link.paid'
   | 'payment_link.created'
+  | 'profile.read'
 
 export interface SecurityLogEntry {
   event: SecurityEvent
