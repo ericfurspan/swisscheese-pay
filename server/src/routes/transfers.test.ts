@@ -180,4 +180,41 @@ describe('transfers routes', () => {
 
     expect(res.status).toBe(409)
   })
+
+  it('logs the Origin header on transfer.initiated when present', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent
+      .post('/api/transfers')
+      .set('Origin', 'http://evil.scpay.test:9000')
+      .send({
+        from_account_id: accountId('CHK-1001'),
+        to_account_id: accountId('CHK-2001'),
+        amount_cents: 1_000,
+      })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'transfer.initiated')
+    expect(line).toMatchObject({ origin: 'http://evil.scpay.test:9000' })
+    logSpy.mockRestore()
+  })
+
+  it('logs origin: null on transfer.initiated when no Origin header is present', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent.post('/api/transfers').send({
+      from_account_id: accountId('CHK-1001'),
+      to_account_id: accountId('CHK-2001'),
+      amount_cents: 1_000,
+    })
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'transfer.initiated')
+    expect(line).toMatchObject({ origin: null })
+    logSpy.mockRestore()
+  })
 })
