@@ -663,3 +663,54 @@ request outright, so no `transfer.initiated` event is ever logged for it at all.
 [`security/detections/sample-vulnerable-phase5-csrf.jsonl`](security/detections/sample-vulnerable-phase5-csrf.jsonl):
 the rule isolates exactly the one mismatched-origin line, not the legitimate same-origin or
 no-origin lines.
+
+## CORS misconfiguration via a reflected-origin middleware
+
+**OWASP / CWE:** A05 Security Misconfiguration · CWE-942.
+**Phase introduced:** Phase 5.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-5-owasp-breadth`,
+`vuln/phase-5-cors` is the runnable vulnerable demonstration state and `fix/phase-5-cors` is the
+matching fixed state. `main` receives only the fixed state via `git merge --no-ff`.
+
+Same same-site-cross-origin threat model as the CSRF entry above: `app.scpay.test` /
+`evil.scpay.test`, both mapped to `127.0.0.1`, sharing the registrable domain `scpay.test`. The
+session cookie's existing `sameSite: 'lax'` still accompanies a background credentialed fetch
+from `evil.scpay.test` to `app.scpay.test`, since that pair is same-site.
+
+### Exploit
+
+[`security/exploits/phase-5-cors.mjs`](security/exploits/phase-5-cors.mjs) confirms via a direct
+HTTP request that the server reflects an arbitrary attacker-chosen `Origin` header back with
+`Access-Control-Allow-Credentials: true` — the root cause, no browser needed for this part.
+[`security/exploits/phase-5-cors.html`](security/exploits/phase-5-cors.html) is the full
+browser-based data-theft PoC: hosted at `evil.scpay.test`, it does a credentialed cross-origin
+`fetch` to `http://app.scpay.test:8082/api/accounts` and, because the reflected-origin +
+credentials response headers make the response readable, displays the victim's real account
+balances on the attacker's page.
+
+### Root cause
+
+A hand-rolled CORS middleware in `server/src/app.ts`, framed as support for "a future
+separate-frontend deployment," reflects `Origin` verbatim with `Access-Control-Allow-Credentials:
+true` — the standard real-world mistake, since a bare `*` wildcard cannot legally be combined with
+credentials, so reflecting the request's own `Origin` is the (broken) workaround.
+
+### Fix
+
+Remove the middleware entirely. This app is single-origin by design (see README's architecture
+section), so the correct fix is "serve no CORS headers at all," not "add a correct allowlist" —
+this reverts to the Phase 0 baseline of zero cross-origin surface.
+
+### Detection
+
+`authz.account_access` (both the accounts list and single-account reads) and the new `profile.read`
+event now log an `origin` field (the request's `Origin` header, verbatim, when present).
+[`security/detections/cors-cross-origin-read.sh`](security/detections/cors-cross-origin-read.sh)
+flags any such event whose `origin` doesn't exactly match the trusted-origin list (same
+exact-origin, not site-level, comparison as the CSRF rule). This flags the same way whether or not
+the vulnerable middleware is present — removing it stops the attacker's `fetch` from _reading_ the
+response, but the request itself still reaches the route and still gets logged with a mismatched
+origin, so this fixture pairing is attack-attempt-vs-legitimate-traffic, like the XSS rule, not
+vuln-state-vs-fixed-state. Validated against
+[`security/detections/sample-vulnerable-phase5-cors.jsonl`](security/detections/sample-vulnerable-phase5-cors.jsonl):
+the rule isolates exactly the one mismatched-origin line.
