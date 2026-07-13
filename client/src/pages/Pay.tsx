@@ -66,7 +66,7 @@ export function PayPage() {
     <div>
       <Nav />
       <h1>Pay {formatCents(link.amount_cents)}</h1>
-      {link.note && <p dangerouslySetInnerHTML={{ __html: link.note }} />}
+      {link.note && <p>{link.note}</p>}
       <form onSubmit={handleSubmit}>
         <label htmlFor="from_account">Pay from</label>
         <select
