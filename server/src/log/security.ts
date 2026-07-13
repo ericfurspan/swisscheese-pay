@@ -12,6 +12,8 @@ export type SecurityEvent =
   | 'admin.action'
   | 'profile.update'
   | 'payment_link.paid'
+  | 'payment_link.created'
+  | 'profile.read'
 
 export interface SecurityLogEntry {
   event: SecurityEvent

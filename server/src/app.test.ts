@@ -1,8 +1,17 @@
 process.env.DB_PATH = ':memory:'
 
 import request from 'supertest'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from './app.js'
+import { getDb } from './db/connection.js'
+import { resetSchema } from './db/schema.js'
+import { seed } from './db/seed.js'
+
+beforeEach(() => {
+  const db = getDb()
+  resetSchema(db)
+  seed(db)
+})
 
 describe('app', () => {
   it('GET /api/health returns ok', async () => {
@@ -23,5 +32,23 @@ describe('app', () => {
     const res = await request(createApp()).get('/api/does-not-exist')
 
     expect(res.status).toBe(404)
+  })
+
+  it('does not reject requests from Phase 1-4 exploit/test tooling (no Origin header)', async () => {
+    const res = await request(createApp()).post('/api/auth/login').send({
+      email: 'alice@scpay.test',
+      password: 'Password123!',
+    })
+
+    expect(res.status).toBe(200)
+  })
+
+  it('never sends Access-Control-* headers (CORS fix -- single-origin by design)', async () => {
+    const res = await request(createApp())
+      .get('/api/health')
+      .set('Origin', 'http://evil.scpay.test:9000')
+
+    expect(res.headers['access-control-allow-origin']).toBeUndefined()
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined()
   })
 })

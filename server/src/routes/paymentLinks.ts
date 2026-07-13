@@ -24,6 +24,8 @@ function generateToken(): string {
   return randomBytes(16).toString('hex')
 }
 
+const SUSPICIOUS_NOTE_PATTERN = /<script|on\w+\s*=|<iframe|javascript:/i
+
 paymentLinksRouter.post('/', (req, res) => {
   const { amount_cents: amountCents, note, account_id: accountId } = req.body ?? {}
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
@@ -45,6 +47,17 @@ paymentLinksRouter.post('/', (req, res) => {
   db.prepare(
     'INSERT INTO payment_links (user_id, account_id, token, amount_cents, note) VALUES (?, ?, ?, ?, ?)',
   ).run(req.user!.uid, accountId, token, amountCents, note ?? null)
+
+  const noteFlagged = typeof note === 'string' && SUSPICIOUS_NOTE_PATTERN.test(note)
+  logSecurity({
+    event: 'payment_link.created',
+    actor_user_id: req.user!.uid,
+    target: `payment_link:${token}`,
+    outcome: 'success',
+    request_id: req.id,
+    ip: req.ip,
+    detail: { note_flagged: noteFlagged },
+  })
 
   res.status(201).json({
     path: `/pay/${token}`,

@@ -140,4 +140,17 @@ describe('profile routes', () => {
     expect(line?.changed_fields).toEqual(['full_name'])
     logSpy.mockRestore()
   })
+
+  it('logs profile.read with the Origin header (or null when absent)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const agent = await loginAsAlice()
+
+    await agent.get('/api/profile').set('Origin', 'http://evil.scpay.test:9000')
+
+    const line = logSpy.mock.calls
+      .map((c) => JSON.parse(c[0] as string))
+      .find((l) => l.event === 'profile.read')
+    expect(line).toMatchObject({ outcome: 'success', origin: 'http://evil.scpay.test:9000' })
+    logSpy.mockRestore()
+  })
 })

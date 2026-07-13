@@ -31,7 +31,11 @@ export function loadAccountForRead(req: Request): AccountDTO | undefined {
     outcome: account ? 'success' : 'denied',
     ip: req.ip,
     request_id: req.id,
-    detail: { owner_user_id: ownerId, target_account_id: accountId },
+    detail: {
+      owner_user_id: ownerId,
+      target_account_id: accountId,
+      origin: req.get('Origin') ?? null,
+    },
   })
 
   return account

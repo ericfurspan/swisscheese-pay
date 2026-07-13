@@ -162,5 +162,29 @@ describe('accounts routes', () => {
       expect(accessLogLines(logSpy)).toHaveLength(0)
       logSpy.mockRestore()
     })
+
+    it('logs origin (or null when absent) on GET / (list), even for an untrusted origin -- GET is not gated by requireTrustedOrigin', async () => {
+      const agent = await loginAsAlice()
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const res = await agent.get('/api/accounts').set('Origin', 'http://evil.scpay.test:9000')
+
+      expect(res.status).toBe(200)
+      const line = accessLogLines(logSpy).find((l) => l.target === 'accounts:list')
+      expect(line).toMatchObject({ outcome: 'success', origin: 'http://evil.scpay.test:9000' })
+      logSpy.mockRestore()
+    })
+
+    it('logs origin: null on GET /:id when no Origin header is present', async () => {
+      const agent = await loginAsAlice()
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      const id = accountId('CHK-1001')
+      await agent.get(`/api/accounts/${id}`)
+
+      const line = accessLogLines(logSpy).find((l) => l.target === `account:${id}`)
+      expect(line).toMatchObject({ origin: null })
+      logSpy.mockRestore()
+    })
   })
 })

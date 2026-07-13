@@ -1,0 +1,3 @@
+{"origin":"http://evil.scpay.test:9000","ts":"2026-07-13T12:00:00.000Z","event":"authz.account_access","actor_user_id":1,"target":"accounts:list","outcome":"success","ip":"127.0.0.1","request_id":"c1d2e3f4-0000-0000-0000-000000000001"}
+{"origin":"http://app.scpay.test:8082","ts":"2026-07-13T12:00:05.000Z","event":"authz.account_access","actor_user_id":1,"target":"accounts:list","outcome":"success","ip":"127.0.0.1","request_id":"c1d2e3f4-0000-0000-0000-000000000002"}
+{"origin":null,"ts":"2026-07-13T12:00:10.000Z","event":"profile.read","actor_user_id":1,"outcome":"success","ip":"127.0.0.1","request_id":"c1d2e3f4-0000-0000-0000-000000000003"}

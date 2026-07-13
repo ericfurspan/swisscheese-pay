@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser'
 import express from 'express'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestId } from './middleware/requestId.js'
+import { requireTrustedOrigin } from './middleware/requireTrustedOrigin.js'
 import { accountsRouter } from './routes/accounts.js'
 import { adminRouter } from './routes/admin.js'
 import { authRouter } from './routes/auth.js'
@@ -23,6 +24,7 @@ export function createApp() {
   app.use(express.json())
   app.use(cookieParser())
   app.use(requestId)
+  app.use(requireTrustedOrigin)
 
   app.get('/api/health', (_req, res) => {
     res.status(200).json({ status: 'ok' })
