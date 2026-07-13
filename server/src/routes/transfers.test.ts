@@ -185,9 +185,12 @@ describe('transfers routes', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const agent = await loginAsAlice()
 
+    // A trusted origin here -- an untrusted one is rejected by
+    // requireTrustedOrigin (fix/phase-5-csrf) before the route ever logs
+    // anything, which is covered separately below.
     await agent
       .post('/api/transfers')
-      .set('Origin', 'http://evil.scpay.test:9000')
+      .set('Origin', 'http://app.scpay.test:8082')
       .send({
         from_account_id: accountId('CHK-1001'),
         to_account_id: accountId('CHK-2001'),
@@ -197,7 +200,7 @@ describe('transfers routes', () => {
     const line = logSpy.mock.calls
       .map((c) => JSON.parse(c[0] as string))
       .find((l) => l.event === 'transfer.initiated')
-    expect(line).toMatchObject({ origin: 'http://evil.scpay.test:9000' })
+    expect(line).toMatchObject({ origin: 'http://app.scpay.test:8082' })
     logSpy.mockRestore()
   })
 
@@ -216,5 +219,31 @@ describe('transfers routes', () => {
       .find((l) => l.event === 'transfer.initiated')
     expect(line).toMatchObject({ origin: null })
     logSpy.mockRestore()
+  })
+
+  it('rejects a transfer whose Origin header is untrusted (CSRF fix)', async () => {
+    const agent = await loginAsAlice()
+
+    const res = await agent
+      .post('/api/transfers')
+      .set('Origin', 'http://evil.scpay.test:9000')
+      .send({
+        from_account_id: accountId('CHK-1001'),
+        to_account_id: accountId('CHK-2001'),
+        amount_cents: 1_000,
+      })
+
+    expect(res.status).toBe(403)
+  })
+
+  it('rejects a text/plain body (CSRF fix -- body-parser no longer accepts it)', async () => {
+    const agent = await loginAsAlice()
+
+    const res = await agent
+      .post('/api/transfers')
+      .set('Content-Type', 'text/plain')
+      .send('{"from_account_id":1,"to_account_id":2,"amount_cents":1000}')
+
+    expect(res.status).toBe(400)
   })
 })

@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser'
 import express from 'express'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestId } from './middleware/requestId.js'
+import { requireTrustedOrigin } from './middleware/requireTrustedOrigin.js'
 import { accountsRouter } from './routes/accounts.js'
 import { adminRouter } from './routes/admin.js'
 import { authRouter } from './routes/auth.js'
@@ -20,11 +21,10 @@ const CLIENT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'c
 // (reset/seed + listen) lives in index.ts, added when the full router set is mounted.
 export function createApp() {
   const app = express()
-  // Accept text/plain bodies too, for a partner-integration client that
-  // posts with that Content-Type -- vuln/phase-5-csrf.
-  app.use(express.json({ type: ['application/json', 'text/plain'] }))
+  app.use(express.json())
   app.use(cookieParser())
   app.use(requestId)
+  app.use(requireTrustedOrigin)
 
   app.get('/api/health', (_req, res) => {
     res.status(200).json({ status: 'ok' })
