@@ -593,3 +593,73 @@ construction. Validated against
 the rule isolates exactly the one suspicious-note line, not the benign one — true regardless of
 whether `vuln/phase-5-xss` or `fix/phase-5-xss` is checked out, since the fix only changes
 rendering, not this creation-time check.
+
+## CSRF via a body-parser leniency drift
+
+**OWASP / CWE:** A01 Broken Access Control (CSRF) · CWE-352.
+**Phase introduced:** Phase 5.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-5-owasp-breadth`,
+`vuln/phase-5-csrf` is the runnable vulnerable demonstration state and `fix/phase-5-csrf` is
+the matching fixed state. `main` receives only the fixed state via `git merge --no-ff`.
+
+**Threat model, stated precisely:** NOT classic internet-wide cross-site CSRF. This app is
+loopback-only by design (see README's architecture section), so there is no internet-facing
+deployment to model that against realistically. The demonstrated attacker is another local
+process on a sibling hostname of the same registrable domain — `app.scpay.test` (the real app)
+and `evil.scpay.test` (the attacker's page), both mapped to `127.0.0.1` locally. Per the
+browser's SameSite "site" definition (registrable domain, not full origin), these are
+**same-site but cross-origin** — a real, if narrower and commonly-misunderstood, limitation:
+SameSite protects against cross-_site_ requests, not cross-_origin_-same-site ones. The session
+cookie's existing `sameSite: 'lax'` (unchanged from Phase 4) therefore still accompanies a
+same-site-cross-origin request, including a top-level POST navigation (SameSite lifts its normal
+method/navigation restrictions entirely for same-site requests). The clean way to demonstrate
+genuine cross-site CSRF against this app's cookie-authenticated-POST design would require serving
+it over HTTPS (so `Secure` cookies are viable) — a real architecture change that fights the
+README's plain-HTTP-loopback design and isn't undertaken here.
+
+### Exploit
+
+[`security/exploits/phase-5-csrf.mjs`](security/exploits/phase-5-csrf.mjs) (Node, HTTP-level
+reproduction) plus [`security/exploits/phase-5-csrf.html`](security/exploits/phase-5-csrf.html)
+(the real browser PoC, since a Node cookie jar doesn't populate a real browser's cookie store).
+An HTML `<form enctype="text/plain">` with a single field whose name+value are crafted so the
+submitted body is valid JSON once concatenated is a CORS-simple request (no preflight) — combined
+with the same-site-cross-origin topology above, an auto-submitting version of this form on
+`evil.scpay.test` forges a transfer from the victim's account while they're merely viewing the
+attacker's page, with no JS/fetch trickery needed.
+
+### Root cause
+
+`server/src/app.ts`'s `express.json()` was widened to `{ type: ['application/json', 'text/plain'] }`,
+framed as leniency for a partner-integration client. This defeats what was otherwise a real, if
+incidental, mitigation: a plain HTML form cannot set `Content-Type: application/json`, so a
+JSON-only body parser blocks the classic form-based CSRF bypass by construction. Widening it to
+also accept `text/plain` reopens exactly that bypass.
+
+### Fix
+
+Two parts: (1) revert `express.json()` to its default (`application/json` only), which alone kills
+this specific bypass technique; (2) add a new global `requireTrustedOrigin` middleware
+(`server/src/middleware/requireTrustedOrigin.ts`), mounted before all routers, rejecting any
+non-`GET` request whose `Origin` header is present and doesn't match a shared trusted-origin list
+(`server/src/security/trustedOrigins.ts`) — principled defense-in-depth independent of
+content-type specifics, not just "we only accept JSON" as the sole defense. Requests with no
+`Origin` header at all are allowed through, so Phase 1-4's existing exploit/test tooling (which
+doesn't set one) isn't broken. A full double-submit CSRF token is the standard production-grade
+defense and isn't built here, since the exact-origin check already closes this phase's
+demonstrated exploit without any client-side changes.
+
+### Detection
+
+`transfer.initiated` (already logged) gained an `origin` field (the request's `Origin` header,
+verbatim, `null` if absent).
+[`security/detections/csrf-cross-origin-transfer.sh`](security/detections/csrf-cross-origin-transfer.sh)
+flags any such event whose `origin` doesn't exactly match the trusted-origin list (exact
+scheme+host+port, not site-level — the attacker here is same-site, so a site-level comparison
+would incorrectly pass the attack). Stated as an anomaly-detection heuristic on request
+provenance, not confirmed-forgery ground truth. Unlike the XSS/CORS rules, this one genuinely is
+vuln-state-vs-fixed-state: the fixed state's `requireTrustedOrigin` middleware rejects the forged
+request outright, so no `transfer.initiated` event is ever logged for it at all. Validated against
+[`security/detections/sample-vulnerable-phase5-csrf.jsonl`](security/detections/sample-vulnerable-phase5-csrf.jsonl):
+the rule isolates exactly the one mismatched-origin line, not the legitimate same-origin or
+no-origin lines.
