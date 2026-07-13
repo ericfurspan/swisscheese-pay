@@ -30,5 +30,6 @@ check negative-amount-transfer.sh sample-vulnerable-phase3-input-validation.json
 check payment-link-recipient-mismatch.sh sample-vulnerable-phase3-input-validation.jsonl 1
 check jwt-forged-token.sh sample-vulnerable-phase4-jwt.jsonl 5
 check authz-account-access.sh sample-vulnerable.jsonl 2
+check xss-suspicious-note.sh sample-vulnerable-phase5-xss.jsonl 1
 
 exit $fail

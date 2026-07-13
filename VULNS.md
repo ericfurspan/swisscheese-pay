@@ -542,3 +542,54 @@ schema change deployed — though the `uid` mismatch on that other line against 
 legacy record is still caught, which is the fifth flag above). Re-verified live against the
 fixed state: the exploit's crack step fails outright (wordlist exhausted, no forgery
 possible), and the rule is empty against a fresh capture.
+
+## Stored XSS via payment-link notes
+
+**OWASP / CWE:** A03 Injection (Cross-Site Scripting) · CWE-79.
+**Phase introduced:** Phase 5.
+**Toggle:** git structure, not a runtime flag. Within branch `phase-5-owasp-breadth`,
+`vuln/phase-5-xss` is the runnable vulnerable demonstration state and `fix/phase-5-xss`
+is the matching fixed state. `main` receives only the fixed state via `git merge --no-ff`;
+branch and tags are kept locally. Config/render drift, not a new feature: `payment_links.note`
+already existed (Phase 3) as free text rendered to a second party (the payer) on `Pay.tsx`;
+the vuln commit only changes how that existing field is rendered.
+
+### Exploit
+
+[`security/exploits/phase-5-xss.mjs`](security/exploits/phase-5-xss.mjs) (Node): an attacker
+(a real, unprivileged seeded customer) creates a payment link whose `note` contains an
+`<img src=x onerror="...">` payload — an event-handler vector, since `<script>` tags inserted
+via `innerHTML`/`dangerouslySetInnerHTML` do not execute (standard DOM behavior). The script
+confirms the note is stored verbatim, unsanitized. Payload execution itself — a second seeded
+user opening the link and the injected script firing, exfiltrating their own `GET /api/accounts`
+data to an attacker-controlled collector — is a manual browser verification step (documented in
+the script's header comment); this repo has no Playwright/Puppeteer-class dependency to automate
+it. The payload cannot read the session cookie itself — `sc_session` is `httpOnly` — its
+demonstrated impact is acting with the victim's authenticated session, not cookie theft.
+
+### Root cause
+
+`Pay.tsx` rendered `note` via plain JSX interpolation (React's default escaping) until the vuln
+commit changed it to `dangerouslySetInnerHTML`, framed as "support basic formatting (bold/line
+breaks) in payment notes." No server-side change — the note was already stored verbatim before
+and after this phase; only client-side rendering regressed.
+
+### Fix
+
+Revert `Pay.tsx` to plain JSX interpolation. No sanitization library added — the "basic
+formatting" feature that motivated the drift is dropped, not replicated safely, since it was
+never a real requirement.
+
+### Detection
+
+New instrumentation: `paymentLinks.ts`'s creation handler didn't log anything before this phase.
+It now logs a `payment_link.created` event with `detail: { note_flagged: boolean }` — `true` when
+`note` matches a case-insensitive regex for `<script`, `on\w+\s*=`, `<iframe`, or `javascript:`.
+[`security/detections/xss-suspicious-note.sh`](security/detections/xss-suspicious-note.sh) flags
+any such event. This is a write-time heuristic on authored content, not confirmation that a
+victim ever executed the payload — XSS execution is client-side and invisible to server logs by
+construction. Validated against
+[`security/detections/sample-vulnerable-phase5-xss.jsonl`](security/detections/sample-vulnerable-phase5-xss.jsonl):
+the rule isolates exactly the one suspicious-note line, not the benign one — true regardless of
+whether `vuln/phase-5-xss` or `fix/phase-5-xss` is checked out, since the fix only changes
+rendering, not this creation-time check.
