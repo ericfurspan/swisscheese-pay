@@ -20,7 +20,9 @@ const CLIENT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'c
 // (reset/seed + listen) lives in index.ts, added when the full router set is mounted.
 export function createApp() {
   const app = express()
-  app.use(express.json())
+  // Accept text/plain bodies too, for a partner-integration client that
+  // posts with that Content-Type -- vuln/phase-5-csrf.
+  app.use(express.json({ type: ['application/json', 'text/plain'] }))
   app.use(cookieParser())
   app.use(requestId)
 
