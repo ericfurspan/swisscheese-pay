@@ -26,6 +26,17 @@ export function createApp() {
   app.use(requestId)
   app.use(requireTrustedOrigin)
 
+  // Reflect the request Origin for CORS, to support a future separate-
+  // frontend deployment -- vuln/phase-5-cors.
+  app.use((req, res, next) => {
+    const origin = req.headers.origin
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Access-Control-Allow-Credentials', 'true')
+    }
+    next()
+  })
+
   app.get('/api/health', (_req, res) => {
     res.status(200).json({ status: 'ok' })
   })
