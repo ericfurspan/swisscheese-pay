@@ -1,0 +1,36 @@
+rules:
+  - id: scpay.react.dangerously-set-inner-html
+    message: Avoid rendering application data with dangerouslySetInnerHTML.
+    severity: ERROR
+    languages: [typescript]
+    pattern-either:
+      - pattern: |
+          <$TAG ... dangerouslySetInnerHTML={{ __html: $VALUE }} ... />
+      - pattern: |
+          <$TAG ... dangerouslySetInnerHTML={{ __html: $VALUE }} ...></$TAG>
+
+  - id: scpay.express.reflected-cors-origin
+    message: Do not add CORS response headers; the UI and API are same-origin.
+    severity: ERROR
+    languages: [typescript]
+    pattern: |
+      $RESPONSE.setHeader('Access-Control-Allow-Origin', $ORIGIN)
+
+  - id: scpay.profile.accepts-role
+    message: The profile endpoint must not accept a role from the request body.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern-inside: |
+          $ROUTER.patch('/', $HANDLER)
+      - pattern: |
+          const { ..., role: $ROLE, ... } = $REQUEST.body ?? {}
+
+  - id: scpay.compose.hardcoded-jwt-secret
+    message: Do not commit a JWT secret in Docker Compose.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include:
+        - docker-compose.yml
+    pattern-regex: (?m)^\s*-\s*JWT_SECRET\s*=\s*[^$\s][^\s]*\s*$
