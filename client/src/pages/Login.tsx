@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ApiError } from '../api/client.js'
 import { useAuth } from '../auth/useAuth.js'
 
 export function LoginPage() {
@@ -17,8 +18,8 @@ export function LoginPage() {
     try {
       await login(email, password)
       navigate('/dashboard')
-    } catch {
-      setError('Invalid email or password')
+    } catch (error) {
+      setError(error instanceof ApiError ? error.message : 'Unable to log in')
     } finally {
       setSubmitting(false)
     }

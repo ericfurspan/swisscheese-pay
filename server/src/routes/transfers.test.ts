@@ -190,7 +190,7 @@ describe('transfers routes', () => {
     // anything, which is covered separately below.
     await agent
       .post('/api/transfers')
-      .set('Origin', 'http://app.scpay.test:8082')
+      .set('Origin', 'http://127.0.0.1:8082')
       .send({
         from_account_id: accountId('CHK-1001'),
         to_account_id: accountId('CHK-2001'),
@@ -200,7 +200,7 @@ describe('transfers routes', () => {
     const line = logSpy.mock.calls
       .map((c) => JSON.parse(c[0] as string))
       .find((l) => l.event === 'transfer.initiated')
-    expect(line).toMatchObject({ origin: 'http://app.scpay.test:8082' })
+    expect(line).toMatchObject({ origin: 'http://127.0.0.1:8082' })
     logSpy.mockRestore()
   })
 

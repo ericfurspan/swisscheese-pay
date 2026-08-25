@@ -22,6 +22,11 @@ describe('requireTrustedOrigin', () => {
   })
 
   it('allows a POST from the configured app origin', async () => {
+    const res = await request(buildTestApp()).post('/action').set('Origin', 'http://127.0.0.1:8082')
+    expect(res.status).toBe(200)
+  })
+
+  it('allows a POST from the configured security-lab origin', async () => {
     const res = await request(buildTestApp())
       .post('/action')
       .set('Origin', 'http://app.scpay.test:8082')

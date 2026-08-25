@@ -112,4 +112,37 @@ describe('LoginPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/invalid email or password/i)
   })
+
+  it('shows the server message when login is rejected for another reason', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === '/api/profile')
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+        if (url === '/api/auth/login') {
+          return new Response(JSON.stringify({ error: 'Origin not trusted for this request' }), {
+            status: 403,
+          })
+        }
+        return new Response(null, { status: 404 })
+      }),
+    )
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+
+    await userEvent.type(screen.getByLabelText(/email/i), 'bob@scpay.test')
+    await userEvent.type(screen.getByLabelText(/password/i), 'Password123!')
+    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /origin not trusted for this request/i,
+    )
+  })
 })

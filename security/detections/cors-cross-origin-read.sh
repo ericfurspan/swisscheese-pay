@@ -22,7 +22,7 @@
 set -euo pipefail
 
 INPUT="${1:-/dev/stdin}"
-TRUSTED_ORIGINS=("http://app.scpay.test:8082" "http://localhost:5173")
+TRUSTED_ORIGINS=("http://127.0.0.1:8082" "http://app.scpay.test:8082" "http://localhost:5173")
 
 jq -R -c 'fromjson?' "$INPUT" | jq -c --argjson trusted "$(printf '%s\n' "${TRUSTED_ORIGINS[@]}" | jq -R . | jq -s .)" '
   select((.event == "authz.account_access" or .event == "profile.read") and .origin != null and ([.origin] - $trusted | length) > 0)
