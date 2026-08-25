@@ -58,11 +58,10 @@ generic OWASP-Top-10 web vulns are kept for breadth but aren't the point:
 - **Excessive data exposure / mass assignment.** Over-returned sensitive fields;
   `role`/`balance` writable via unexpected request fields.
 
-Standard web-vuln coverage — stored XSS, CSRF, and CORS misconfiguration — is also
-covered (Phase 5), for breadth alongside the four differentiators above. Open redirect,
-clickjacking, and client-side-only authz were scoped out as weaker fits for this app's
-specific surface (see `docs/superpowers/specs/2026-07-13-phase-5-owasp-breadth-design.md`
-for the reasoning).
+Standard web-vuln coverage, including stored XSS, CSRF, and CORS misconfiguration, is
+also covered (Phase 5) for breadth alongside the four differentiators above. Open
+redirect, clickjacking, and client-side-only authz were scoped out as weaker fits for
+this app's specific surface.
 
 ## Architecture
 
