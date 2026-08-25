@@ -1,0 +1,12 @@
+title = "SwissCheese Pay Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reviewed synthetic idempotency key in the concurrency detection fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^security/detections/sample-vulnerable-phase3-concurrency\.jsonl$''']
+regexTarget = "match"
+regexes = ['''470873c3-d272-40fe-b1b3-6cae562bfa42''']

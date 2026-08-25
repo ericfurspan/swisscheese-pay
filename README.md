@@ -152,4 +152,8 @@ in [`VULNS.md`](./VULNS.md).
   comes from docker-compose's `127.0.0.1:8082:8082` host-side bind. Either
   way: never expose this beyond localhost.
 - No real credentials, money, or PII. All seed data is fabricated.
-- Private repo until deliberately made otherwise.
+- Public educational repository. Treat every `vuln/*` tag as intentionally unsafe.
+
+## License
+
+Licensed under the [MIT License](./LICENSE).

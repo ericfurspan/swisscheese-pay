@@ -68,6 +68,11 @@ Status as of 2026-08-25:
 
 Remaining follow-up:
 
-- Add a narrow, reviewed Gitleaks exception for the two exact idempotency-key fixture findings.
 - Keep vulnerable-tag scanning non-blocking and separate from clean-main protection.
 - Preserve the loopback-only runtime and ephemeral-CI guardrails.
+
+Completed on 2026-08-25:
+
+- Added a narrow Gitleaks exception limited to the reviewed synthetic
+  idempotency-key fixture value and its exact file.
+- Added the MIT License and updated the README for public portfolio use.
