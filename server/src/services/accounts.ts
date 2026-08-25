@@ -51,17 +51,15 @@ export function isAccountOwnedByUser(
   return getAccountOwnerId(db, accountId) === uid
 }
 
-// The ownership check that keeps this a "secure baseline" -- returning a row
-// only when it belongs to uid, rather than fetching by id alone, is what
-// vuln/phase-1-bola deliberately removed and fix/phase-1-bola restores.
+// lab/all-vulnerabilities: deliberately fetches by object id alone so an
+// authenticated user can read another user's account (BOLA / IDOR).
 export function getAccountForUser(
   db: Database.Database,
   accountId: number,
-  uid: number,
+  uid: number, // eslint-disable-line @typescript-eslint/no-unused-vars
 ): AccountDTO | undefined {
-  return db
-    .prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ? AND user_id = ?`)
-    .get(accountId, uid) as AccountDTO | undefined
+  return db.prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ?`).get(accountId) as
+    AccountDTO | undefined
 }
 
 export function listTransactionsForAccount(

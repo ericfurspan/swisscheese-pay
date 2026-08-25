@@ -66,13 +66,13 @@ describe('transfer', () => {
     })
   })
 
-  it('rejects a negative amount (negative-amount transfer fixed)', async () => {
+  it('reverses balances for a negative amount (negative-amount vulnerability)', async () => {
     const db = setup()
     const result = await transfer(db, { fromId: 1, toId: 2, amountCents: -1_000, uid: 1 })
 
-    expect(result).toEqual({ ok: false, reason: 'invalid_amount' })
-    expect(balanceOf(db, 1)).toBe(10_000)
-    expect(balanceOf(db, 2)).toBe(5_000)
+    expect(result).toMatchObject({ ok: true, balanceAfterCents: 11_000 })
+    expect(balanceOf(db, 1)).toBe(11_000)
+    expect(balanceOf(db, 2)).toBe(4_000)
   })
 
   it('rejects an overdraft, leaving balances unchanged (single request)', async () => {
@@ -100,7 +100,7 @@ describe('transfer', () => {
     expect(balanceOf(db, 1)).toBe(10_000)
   })
 
-  it('-- fixed at fix/phase-3-concurrency -- rejects all but one of several concurrent overdrawing transfers', async () => {
+  it('allows several concurrent overdrawing transfers (race vulnerability)', async () => {
     const db = setup()
     const results = await Promise.all([
       transfer(db, { fromId: 1, toId: 2, amountCents: 6_000, uid: 1 }),
@@ -109,11 +109,11 @@ describe('transfer', () => {
     ])
 
     const succeeded = results.filter((r) => r.ok)
-    expect(succeeded.length).toBe(1)
-    expect(balanceOf(db, 1)).toBeGreaterThanOrEqual(0)
+    expect(succeeded.length).toBe(3)
+    expect(balanceOf(db, 1)).toBe(-8_000)
   })
 
-  it('-- fixed at fix/phase-3-concurrency -- executes a replayed idempotency key exactly once', async () => {
+  it('executes a concurrently replayed idempotency key twice', async () => {
     const db = setup()
     const key = 'race-key-1'
     const results = await Promise.all([
@@ -124,11 +124,11 @@ describe('transfer', () => {
     const transferIds = new Set(
       results.filter((r) => r.ok).map((r) => (r as { transferId: number }).transferId),
     )
-    expect(transferIds.size).toBe(1)
-    expect(balanceOf(db, 1)).toBe(10_000 - 100)
+    expect(transferIds.size).toBe(2)
+    expect(balanceOf(db, 1)).toBe(10_000 - 200)
   })
 
-  it('rejects idempotency-key reuse with a mismatched payload as a conflict, not a silent replay', async () => {
+  it('silently replays a mismatched idempotency-key request', async () => {
     const db = setup()
     const key = 'reused-key-1'
 
@@ -141,7 +141,7 @@ describe('transfer', () => {
     })
     expect(first.ok).toBe(true)
 
-    // Same key, different amount -- must not be treated as the same request.
+    // Same key, different amount is incorrectly treated as the same request.
     const second = await transfer(db, {
       fromId: 1,
       toId: 2,
@@ -150,8 +150,8 @@ describe('transfer', () => {
       idempotencyKey: key,
     })
 
-    expect(second).toEqual({ ok: false, reason: 'idempotency_conflict' })
-    expect(balanceOf(db, 1)).toBe(10_000 - 100) // only the first transfer's debit applied
+    expect(second).toEqual(first)
+    expect(balanceOf(db, 1)).toBe(10_000 - 100)
   })
 
   it('returns the original result for an exact retry with the same idempotency key', async () => {
@@ -177,7 +177,7 @@ describe('transfer', () => {
     expect(second).toEqual(first)
   })
 
-  it('never returns another user transfer id when a different user reuses their key', async () => {
+  it('returns another user transfer id when a different user reuses their key', async () => {
     const db = setup()
     const key = 'cross-user-key'
 
@@ -201,9 +201,7 @@ describe('transfer', () => {
       idempotencyKey: key,
     })
 
-    expect(attacker).toEqual({ ok: false, reason: 'idempotency_conflict' })
-    // The headline property: the attacker's response carries no transfer id at all,
-    // let alone the victim's.
-    expect(attacker).not.toHaveProperty('transferId')
+    expect(attacker).toMatchObject({ ok: true })
+    expect(attacker).toHaveProperty('transferId', (victim as { transferId: number }).transferId)
   })
 })

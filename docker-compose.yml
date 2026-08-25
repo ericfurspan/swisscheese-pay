@@ -7,12 +7,7 @@ services:
       # Bind inside the container's network namespace, not the host -- the
       # loopback-only guarantee comes from the port spec above, not this.
       - HOST=0.0.0.0
-      # JWT_SECRET is intentionally not set here -- docker-entrypoint.sh
-      # generates a fresh random one at boot when it's absent, so no secret
-      # ends up committed to this file. fix/phase-4-jwt: an explicit value
-      # was set here for QA session continuity and never rotated out --
-      # see server/src/auth/token.ts's requireSecret() for the
-      # defense-in-depth length guard added alongside this revert. Set
-      # JWT_SECRET explicitly (e.g. via a .env file, ≥32 characters) only
-      # if you specifically need session continuity across restarts.
+      # Intentionally weak and committed for the JWT cracking exercise.
+      # This lab branch must remain loopback-only.
+      - JWT_SECRET=swisscheese-qa-2024
     restart: unless-stopped

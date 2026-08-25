@@ -54,10 +54,13 @@ describe('token secret guard', () => {
     await expect(import('./token.js')).rejects.toThrow(/JWT_SECRET/)
   })
 
-  it('refuses to load with a JWT_SECRET shorter than 32 characters', async () => {
+  it('accepts a crackable short JWT_SECRET (JWT vulnerability)', async () => {
     vi.resetModules()
     vi.stubEnv('JWT_SECRET', 'short-secret')
 
-    await expect(import('./token.js')).rejects.toThrow(/32 characters/)
+    await expect(import('./token.js')).resolves.toMatchObject({
+      signToken: expect.any(Function),
+      verifyToken: expect.any(Function),
+    })
   })
 })

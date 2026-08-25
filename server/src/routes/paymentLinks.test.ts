@@ -118,12 +118,13 @@ describe('payment links routes', () => {
     expect(res.status).toBe(404)
   })
 
-  it('ignores a to_account_id override and always pays the link account (tampered-recipient fixed)', async () => {
+  it('honors a tampered to_account_id override', async () => {
     const bobAgent = await loginAs('bob@scpay.test')
     const created = await bobAgent
       .post('/api/payment-links')
       .send({ amount_cents: 5_000, note: 'Rent', account_id: accountId('CHK-2001') })
     const bobBalanceBefore = balanceOf('CHK-2001')
+    const attackerBalanceBefore = balanceOf('SAV-1002')
 
     const aliceAgent = await loginAs('alice@scpay.test')
     const res = await aliceAgent.post(`/api/payment-links/${created.body.token}/pay`).send({
@@ -132,10 +133,11 @@ describe('payment links routes', () => {
     })
 
     expect(res.status).toBe(201)
-    expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore + 5_000)
+    expect(balanceOf('CHK-2001')).toBe(bobBalanceBefore)
+    expect(balanceOf('SAV-1002')).toBe(attackerBalanceBefore + 5_000)
   })
 
-  it('logs payment_link.paid with matching link_account_id and actual_to_account_id (tampered-recipient fixed)', async () => {
+  it('logs mismatched link and actual recipient account ids', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const bobAgent = await loginAs('bob@scpay.test')
     const created = await bobAgent
@@ -154,7 +156,7 @@ describe('payment links routes', () => {
     expect(line).toMatchObject({
       outcome: 'success',
       link_account_id: accountId('CHK-2001'),
-      actual_to_account_id: accountId('CHK-2001'),
+      actual_to_account_id: accountId('SAV-1002'),
     })
     logSpy.mockRestore()
   })

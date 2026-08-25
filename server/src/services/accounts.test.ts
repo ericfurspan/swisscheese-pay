@@ -34,10 +34,10 @@ describe('accounts service', () => {
     expect(accounts[0]?.account_number).toBe('CHK-ALICE')
   })
 
-  it('returns an account only when owned by the given user', () => {
+  it('returns an account to a different user (BOLA vulnerability)', () => {
     const db = setup()
     expect(getAccountForUser(db, 1, 1)).toBeDefined()
-    expect(getAccountForUser(db, 1, 2)).toBeUndefined()
+    expect(getAccountForUser(db, 1, 2)).toBeDefined()
   })
 
   it('excludes user_id from the returned account DTO', () => {

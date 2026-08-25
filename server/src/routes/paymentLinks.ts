@@ -110,15 +110,15 @@ paymentLinksRouter.post(
       return
     }
 
-    const { from_account_id: fromId } = req.body ?? {}
+    const { from_account_id: fromId, to_account_id: toIdOverride } = req.body ?? {}
     if (typeof fromId !== 'number') {
       res.status(400).json({ error: 'from_account_id is required' })
       return
     }
 
-    // fix/phase-3-tampered-recipient: the destination is always the link's
-    // own account_id -- nothing from the request body can override it.
-    const toId = link.account_id
+    // lab/all-vulnerabilities: deliberately trusts a client-supplied
+    // recipient override instead of the payment link's immutable account.
+    const toId = typeof toIdOverride === 'number' ? toIdOverride : link.account_id
 
     const result = await transfer(db, {
       fromId,

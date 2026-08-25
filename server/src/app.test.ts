@@ -43,12 +43,12 @@ describe('app', () => {
     expect(res.status).toBe(200)
   })
 
-  it('never sends Access-Control-* headers (CORS fix -- single-origin by design)', async () => {
+  it('reflects an arbitrary origin while allowing credentials (CORS vulnerability)', async () => {
     const res = await request(createApp())
       .get('/api/health')
       .set('Origin', 'http://evil.scpay.test:9000')
 
-    expect(res.headers['access-control-allow-origin']).toBeUndefined()
-    expect(res.headers['access-control-allow-credentials']).toBeUndefined()
+    expect(res.headers['access-control-allow-origin']).toBe('http://evil.scpay.test:9000')
+    expect(res.headers['access-control-allow-credentials']).toBe('true')
   })
 })

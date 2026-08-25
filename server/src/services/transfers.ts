@@ -22,7 +22,6 @@ export interface TransferInput {
   paymentLinkId?: number
 }
 
-class InsufficientFundsError extends Error {}
 class InvalidDestinationError extends Error {}
 class IdempotencyConflictError extends Error {}
 
@@ -60,7 +59,8 @@ export async function transfer(
     return { ok: false, reason: 'not_owner' }
   }
 
-  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+  // lab/all-vulnerabilities: deliberately accepts negative integer amounts.
+  if (!Number.isInteger(amountCents)) {
     return { ok: false, reason: 'invalid_amount' }
   }
 
@@ -68,15 +68,33 @@ export async function transfer(
     return { ok: false, reason: 'invalid_destination' }
   }
 
-  // fix/phase-3-concurrency: the fraud check still runs (it's a realistic
-  // feature) but nothing about correctness depends on what happened before
-  // or during it -- the synchronous transaction below is the sole authority
-  // on both the idempotency key and the balance, evaluated only at write time.
+  // lab/all-vulnerabilities: these checks happen before the await gap. Two
+  // concurrent calls can both pass using stale state and then both write.
+  const balanceRow = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId) as
+    BalanceRow | undefined
+  if (!balanceRow || balanceRow.balance_cents < amountCents) {
+    return { ok: false, reason: 'insufficient_funds' }
+  }
+
+  // A reused key returns another request's transfer without confirming that
+  // its actor, destination, or amount match this request.
+  if (idempotencyKey !== undefined) {
+    const existing = db
+      .prepare(
+        'SELECT id, from_account_id, to_account_id, amount_cents FROM transfers WHERE idempotency_key = ?',
+      )
+      .get(idempotencyKey) as ExistingTransferRow | undefined
+    if (existing) {
+      const balanceAfterCents = (
+        db.prepare('SELECT balance_cents FROM accounts WHERE id = ?').get(fromId) as BalanceRow
+      ).balance_cents
+      return { ok: true, transferId: existing.id, balanceAfterCents }
+    }
+  }
+
   await mockFraudCheck()
 
-  const debitStmt = db.prepare(
-    'UPDATE accounts SET balance_cents = balance_cents - ? WHERE id = ? AND balance_cents >= ?',
-  )
+  const debitStmt = db.prepare('UPDATE accounts SET balance_cents = balance_cents - ? WHERE id = ?')
   const creditStmt = db.prepare(
     'UPDATE accounts SET balance_cents = balance_cents + ? WHERE id = ?',
   )
@@ -88,25 +106,11 @@ export async function transfer(
   )
   const balanceStmt = db.prepare('SELECT balance_cents FROM accounts WHERE id = ?')
 
-  const findByIdempotencyKey = db.prepare(
-    'SELECT id, from_account_id, to_account_id, amount_cents FROM transfers WHERE idempotency_key = ?',
-  )
   const findByPaymentLinkId = db.prepare(
     'SELECT id, from_account_id, to_account_id, amount_cents FROM transfers WHERE payment_link_id = ?',
   )
 
   const run = db.transaction(() => {
-    if (idempotencyKey !== undefined) {
-      const existing = findByIdempotencyKey.get(idempotencyKey) as ExistingTransferRow | undefined
-      if (existing) {
-        if (matchesRequest(existing, fromId, toId, amountCents)) {
-          const balanceAfterCents = (balanceStmt.get(fromId) as BalanceRow).balance_cents
-          return { transferId: existing.id, balanceAfterCents }
-        }
-        throw new IdempotencyConflictError()
-      }
-    }
-
     if (paymentLinkId !== undefined) {
       const existing = findByPaymentLinkId.get(paymentLinkId) as ExistingTransferRow | undefined
       if (existing) {
@@ -118,8 +122,7 @@ export async function transfer(
       }
     }
 
-    const debited = debitStmt.run(amountCents, fromId, amountCents)
-    if (debited.changes === 0) throw new InsufficientFundsError()
+    debitStmt.run(amountCents, fromId)
 
     const credited = creditStmt.run(amountCents, toId)
     if (credited.changes === 0) throw new InvalidDestinationError()
@@ -141,7 +144,6 @@ export async function transfer(
     const result = run()
     return { ok: true, transferId: result.transferId, balanceAfterCents: result.balanceAfterCents }
   } catch (err) {
-    if (err instanceof InsufficientFundsError) return { ok: false, reason: 'insufficient_funds' }
     if (err instanceof InvalidDestinationError) return { ok: false, reason: 'invalid_destination' }
     if (err instanceof IdempotencyConflictError)
       return { ok: false, reason: 'idempotency_conflict' }

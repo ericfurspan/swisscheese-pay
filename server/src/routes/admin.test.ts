@@ -34,15 +34,15 @@ describe('GET /api/admin/users', () => {
     expect(res.status).toBe(403)
   })
 
-  it('excludes password_hash and masks ssn for a real admin', async () => {
+  it('exposes password_hash and unmasked ssn to a real admin', async () => {
     const agent = await loginAs('admin@scpay.test')
 
     const res = await agent.get('/api/admin/users')
 
     expect(res.status).toBe(200)
     const bob = res.body.find((u: { email: string }) => u.email === 'bob@scpay.test')
-    expect(bob).not.toHaveProperty('password_hash')
-    expect(bob.ssn).toBe('***-**-4321')
+    expect(bob).toHaveProperty('password_hash')
+    expect(bob.ssn).toBe('987-65-4321')
     expect(bob.role).toBe('customer')
   })
 

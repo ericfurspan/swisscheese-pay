@@ -75,7 +75,7 @@ describe('transfers routes', () => {
     expect(balanceOf('CHK-2001')).toBe(25_000)
   })
 
-  it('rejects a negative amount, balance unchanged (negative-amount transfer fixed)', async () => {
+  it('accepts a negative amount and reverses the balance movement', async () => {
     const agent = await loginAsAlice()
 
     const res = await agent.post('/api/transfers').send({
@@ -84,8 +84,9 @@ describe('transfers routes', () => {
       amount_cents: -1_000,
     })
 
-    expect(res.status).toBe(400)
-    expect(balanceOf('CHK-1001')).toBe(100_000)
+    expect(res.status).toBe(201)
+    expect(balanceOf('CHK-1001')).toBe(101_000)
+    expect(balanceOf('CHK-2001')).toBe(24_000)
   })
 
   it('rejects a transfer to a nonexistent account, leaving the balance unchanged', async () => {
@@ -115,7 +116,7 @@ describe('transfers routes', () => {
     expect(balanceOf('CHK-2001')).toBe(25_000)
   })
 
-  it('-- fixed at fix/phase-3-concurrency -- rejects all but one of several concurrent overdrawing transfers', async () => {
+  it('allows concurrent transfers to overdraw the source account', async () => {
     const agent = await loginAsAlice()
     const fromId = accountId('CHK-1001')
     const toId = accountId('CHK-2001')
@@ -130,8 +131,8 @@ describe('transfers routes', () => {
     ])
 
     const succeeded = responses.filter((r) => r.status === 201)
-    expect(succeeded.length).toBe(1)
-    expect(balanceOf('CHK-1001')).toBeGreaterThanOrEqual(0)
+    expect(succeeded.length).toBe(2)
+    expect(balanceOf('CHK-1001')).toBe(-20_000)
   })
 
   it('logs balance_after_cents and idempotency_key on transfer.completed', async () => {
@@ -158,9 +159,9 @@ describe('transfers routes', () => {
     logSpy.mockRestore()
   })
 
-  it('returns 409 when Idempotency-Key is reused with a different payload', async () => {
+  it('silently replays an Idempotency-Key used with a different payload', async () => {
     const agent = await loginAsAlice()
-    await agent
+    const first = await agent
       .post('/api/transfers')
       .set('Idempotency-Key', 'route-key-1')
       .send({
@@ -178,16 +179,14 @@ describe('transfers routes', () => {
         amount_cents: 200,
       })
 
-    expect(res.status).toBe(409)
+    expect(res.status).toBe(201)
+    expect(res.body.id).toBe(first.body.id)
   })
 
   it('logs the Origin header on transfer.initiated when present', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const agent = await loginAsAlice()
 
-    // A trusted origin here -- an untrusted one is rejected by
-    // requireTrustedOrigin (fix/phase-5-csrf) before the route ever logs
-    // anything, which is covered separately below.
     await agent
       .post('/api/transfers')
       .set('Origin', 'http://127.0.0.1:8082')
@@ -221,7 +220,7 @@ describe('transfers routes', () => {
     logSpy.mockRestore()
   })
 
-  it('rejects a transfer whose Origin header is untrusted (CSRF fix)', async () => {
+  it('accepts a transfer whose Origin header is untrusted (CSRF vulnerability)', async () => {
     const agent = await loginAsAlice()
 
     const res = await agent
@@ -233,10 +232,10 @@ describe('transfers routes', () => {
         amount_cents: 1_000,
       })
 
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(201)
   })
 
-  it('rejects a text/plain body (CSRF fix -- body-parser no longer accepts it)', async () => {
+  it('accepts a text/plain JSON body (CSRF vulnerability)', async () => {
     const agent = await loginAsAlice()
 
     const res = await agent
@@ -244,6 +243,6 @@ describe('transfers routes', () => {
       .set('Content-Type', 'text/plain')
       .send('{"from_account_id":1,"to_account_id":2,"amount_cents":1000}')
 
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(201)
   })
 })

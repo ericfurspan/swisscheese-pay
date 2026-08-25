@@ -5,11 +5,11 @@ hands-on application security practice with OWASP ZAP and Burp Suite.
 
 ## Security posture
 
-`main` contains the fixed implementation for every documented vulnerability. Runnable
-vulnerable snapshots are preserved only in the `vuln/*` tags, paired with corresponding
-`fix/*` tags for comparison. This structure does not guarantee that `main` has no unknown
-vulnerabilities; it means none of the project's intentionally introduced demonstration
-vulnerabilities remain active there.
+`lab/all-vulnerabilities` is the cumulative training target. All nine documented
+vulnerabilities are active together in one running app. `main` retains the fixed
+implementations, while the paired `vuln/*` and `fix/*` tags preserve each focused
+before-and-after comparison. None of these states guarantees the absence of unknown
+vulnerabilities.
 
 ## What this is
 
@@ -88,15 +88,29 @@ Browser ──HTTP──> 127.0.0.1:8082 ──> Express
 **Stack:** React + Vite + TypeScript (client), Express + TypeScript (server),
 `better-sqlite3`, JWT auth in an httpOnly cookie.
 
-## Running it
+## Run the cumulative lab
 
 ```
-make up      # docker compose up --build -d
+git switch lab/all-vulnerabilities
+make lab
+```
+
+Then visit `http://127.0.0.1:8082`. The SQLite database is reseeded whenever the
+container starts. To reproduce all nine vulnerabilities automatically, with a clean
+container for each stateful exploit:
+
+```
+make verify-lab
+```
+
+Useful lifecycle commands:
+
+```
 make logs
 make down
 ```
 
-Then visit `http://127.0.0.1:8082`. Seeded logins (all password `Password123!`):
+Seeded logins, all using password `Password123!`:
 
 - `alice@scpay.test`
 - `bob@scpay.test`
@@ -105,11 +119,11 @@ Then visit `http://127.0.0.1:8082`. Seeded logins (all password `Password123!`):
 Without Docker: `npm install && npm run build && npm run dev` (server serves the built
 client at the same URL above).
 
-## Demo the vulnerabilities
+## Compare an individual vulnerability with its fix
 
-Each vulnerability is a paired `vuln/*` / `fix/*` git tag. Check out a tag, rebuild, run
-the matching exploit script, then repeat against its `fix/*` counterpart (or `main`, which
-carries the same fix) to see the difference:
+The cumulative branch is the simplest way to use the project. For focused engineering
+evidence, each vulnerability also has paired `vuln/*` and `fix/*` tags. Check out a tag,
+rebuild, run its exploit, then repeat against its fixed counterpart:
 
 ```
 git checkout vuln/phase-4-jwt

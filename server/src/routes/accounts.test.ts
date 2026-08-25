@@ -70,12 +70,13 @@ describe('accounts routes', () => {
     expect(res.body).not.toHaveProperty('user_id')
   })
 
-  it("returns 404 for another user's account (no existence leak)", async () => {
+  it("returns another user's account (BOLA vulnerability)", async () => {
     const agent = await loginAsAlice()
 
     const res = await agent.get(`/api/accounts/${accountId('CHK-2001')}`)
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(200)
+    expect(res.body.account_number).toBe('CHK-2001')
   })
 
   it('returns transactions for an owned account', async () => {
@@ -87,12 +88,13 @@ describe('accounts routes', () => {
     expect(res.body.length).toBeGreaterThan(0)
   })
 
-  it("returns 404 for another user's account transactions", async () => {
+  it("returns another user's account transactions (BOLA vulnerability)", async () => {
     const agent = await loginAsAlice()
 
     const res = await agent.get(`/api/accounts/${accountId('CHK-2001')}/transactions`)
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(200)
+    expect(res.body.length).toBeGreaterThan(0)
   })
 
   describe('authz.account_access logging', () => {
@@ -116,23 +118,19 @@ describe('accounts routes', () => {
       logSpy.mockRestore()
     })
 
-    // fix/phase-1-bola: ownership predicate restored, so a cross-owner read
-    // 404s and this logs outcome=denied. vuln/phase-1-bola's commit logs
-    // outcome=success for the same request instead -- see the security/detections/
-    // rule and sample-vulnerable.jsonl for that state.
-    it('logs outcome=denied with a mismatched owner_user_id for a cross-owner read', async () => {
+    it('logs outcome=success with a mismatched owner_user_id for a cross-owner read', async () => {
       const agent = await loginAsAlice()
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
       const id = accountId('CHK-2001')
       const res = await agent.get(`/api/accounts/${id}`)
 
-      expect(res.status).toBe(404)
+      expect(res.status).toBe(200)
       const line = accessLogLines(logSpy)[0]
       expect(line).toMatchObject({
         event: 'authz.account_access',
         actor_user_id: userId('alice@scpay.test'),
-        outcome: 'denied',
+        outcome: 'success',
         owner_user_id: userId('bob@scpay.test'),
       })
       expect(line.actor_user_id).not.toBe(line.owner_user_id)

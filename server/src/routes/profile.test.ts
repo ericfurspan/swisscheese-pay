@@ -69,7 +69,7 @@ describe('profile routes', () => {
     expect(bob.full_name).toBe('Bob Brown')
   })
 
-  it('ignores a role field in the request body (mass assignment fixed)', async () => {
+  it('accepts a role field in the request body (mass-assignment vulnerability)', async () => {
     const agent = await loginAsAlice()
 
     const res = await agent
@@ -83,7 +83,7 @@ describe('profile routes', () => {
       role: string
       full_name: string
     }
-    expect(alice.role).toBe('customer')
+    expect(alice.role).toBe('admin')
     expect(alice.full_name).toBe('Alice Updated')
   })
 
@@ -128,7 +128,7 @@ describe('profile routes', () => {
     logSpy.mockRestore()
   })
 
-  it('logs profile.update with only full_name in changed_fields even if role is smuggled in', async () => {
+  it('logs the smuggled role in changed_fields', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const agent = await loginAsAlice()
 
@@ -137,7 +137,7 @@ describe('profile routes', () => {
     const line = logSpy.mock.calls
       .map((c) => JSON.parse(c[0] as string))
       .find((l) => l.event === 'profile.update')
-    expect(line?.changed_fields).toEqual(['full_name'])
+    expect(line?.changed_fields).toEqual(['full_name', 'role'])
     logSpy.mockRestore()
   })
 
