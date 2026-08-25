@@ -7,17 +7,19 @@
 // sync with this one by hand -- each script's header comment cross-
 // references this file as a reminder.
 //
-// Includes both the deployed app origin AND the Vite dev-mode origin: the
-// dev proxy (client/vite.config.ts) rewrites Host, not Origin, so a
-// legitimate browser request made through it still carries the frontend's
-// real origin (Vite's own dev server origin) all the way to the backend.
-// A check that only accepted the deployed origin would reject ordinary
-// dev-mode transfers/profile-edits/payment-link creation.
-const DEFAULT_APP_ORIGIN = 'http://app.scpay.test:8082'
+// Includes the README's loopback app origin, the sibling-hostname security
+// lab origin, and the Vite dev-mode origin. The dev proxy
+// (client/vite.config.ts) rewrites Host, not Origin, so a legitimate browser
+// request made through it still carries the frontend's real origin all the
+// way to the backend. A check that only accepted the deployed origin would
+// reject ordinary dev-mode transfers, profile edits, and payment-link creation.
+const DEFAULT_APP_ORIGIN = 'http://127.0.0.1:8082'
+const DEFAULT_LAB_ORIGIN = 'http://app.scpay.test:8082'
 const DEFAULT_DEV_ORIGIN = 'http://localhost:5173'
 
 export const TRUSTED_ORIGINS: readonly string[] = [
   process.env.APP_ORIGIN ?? DEFAULT_APP_ORIGIN,
+  process.env.LAB_ORIGIN ?? DEFAULT_LAB_ORIGIN,
   process.env.DEV_ORIGIN ?? DEFAULT_DEV_ORIGIN,
 ]
 
