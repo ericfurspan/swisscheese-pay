@@ -3,6 +3,14 @@
 An intentionally vulnerable personal banking / payments dashboard, built as a target for
 hands-on application security practice with OWASP ZAP and Burp Suite.
 
+## Security posture
+
+`main` contains the fixed implementation for every documented vulnerability. Runnable
+vulnerable snapshots are preserved only in the `vuln/*` tags, paired with corresponding
+`fix/*` tags for comparison. This structure does not guarantee that `main` has no unknown
+vulnerabilities; it means none of the project's intentionally introduced demonstration
+vulnerabilities remain active there.
+
 ## What this is
 
 SwissCheese Pay is a minimal neobank-style account portal: register, log in, view
